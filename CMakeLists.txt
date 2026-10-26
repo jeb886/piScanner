@@ -86,6 +86,13 @@ endforeach()
 if(PISCAN_BUILD_TESTS)
     enable_testing()
     add_executable(piscan_tests tests/test_main.cpp)
+    add_executable(piscan_perf_tests tests/test_perf.cpp)
+    target_compile_features(piscan_perf_tests PRIVATE cxx_std_20)
+    target_compile_options(piscan_perf_tests PRIVATE -Wall -Wextra)
+    target_link_libraries(piscan_perf_tests PRIVATE piscan_core)
+    if(PISCAN_NATIVE)
+        target_compile_options(piscan_perf_tests PRIVATE -mcpu=native)
+    endif()
     target_compile_features(piscan_tests PRIVATE cxx_std_20)
     target_compile_options(piscan_tests PRIVATE -Wall -Wextra)
     target_link_libraries(piscan_tests PRIVATE piscan_core)
@@ -96,5 +103,9 @@ if(PISCAN_BUILD_TESTS)
         NAME piscan_tests
         COMMAND piscan_tests "$<TARGET_FILE:piscan>" "${CMAKE_CURRENT_BINARY_DIR}/bench-smoke.pgm"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/data"
+    )
+    add_test(
+        NAME piscan_perf_tests
+        COMMAND piscan_perf_tests "${CMAKE_CURRENT_SOURCE_DIR}/tests/data"
     )
 endif()

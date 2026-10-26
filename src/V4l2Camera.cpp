@@ -103,6 +103,68 @@ int requestedSizeSupport(int fd, std::uint32_t pixelFormat, std::uint32_t width,
     }
 }
 
+// 1 when the format can deliver at least `fps` frames/sec at the size, 0 when
+// it cannot, -1 when the camera does not report frame intervals.
+int requestedFpsSupport(int fd, std::uint32_t pixelFormat, std::uint32_t width, std::uint32_t height, int fps)
+{
+    bool foundUsableInterval = false;
+    for (std::uint32_t index = 0;; ++index) {
+        v4l2_frmivalenum interval{};
+        interval.index = index;
+        interval.pixel_format = pixelFormat;
+        interval.width = width;
+        interval.height = height;
+        if (xioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &interval) < 0)
+            return foundUsableInterval ? 0 : -1;
+        double maxFps = 0;
+        if (interval.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+            foundUsableInterval = true;
+            if (interval.discrete.numerator != 0)
+                maxFps = static_cast<double>(interval.discrete.denominator) / interval.discrete.numerator;
+        } else if (interval.type == V4L2_FRMIVAL_TYPE_CONTINUOUS ||
+                   interval.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
+            foundUsableInterval = true;
+            if (interval.stepwise.min.numerator != 0)
+                maxFps = static_cast<double>(interval.stepwise.min.denominator) / interval.stepwise.min.numerator;
+        }
+        if (foundUsableInterval && maxFps >= fps)
+            return 1;
+    }
+}
+
+}
+
+std::uint32_t choosePixelFormat(const Config& config, const std::vector<std::uint32_t>& supported,
+                                const std::function<int(std::uint32_t)>& sizeSupport,
+                                const std::function<int(std::uint32_t)>& fpsSupport)
+{
+    std::vector<std::uint32_t> candidates;
+    if (config.pixfmt == "auto")
+        candidates = {V4L2_PIX_FMT_GREY, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_MJPEG};
+    else
+        candidates = {fourcc(config.pixfmt)};
+
+    std::uint32_t sizeFallback = 0;
+    std::uint32_t unknownFallback = 0;
+    for (const auto candidate : candidates) {
+        if (std::find(supported.begin(), supported.end(), candidate) == supported.end())
+            continue;
+        if (config.pixfmt != "auto")
+            return candidate;
+        const int size = sizeSupport(candidate);
+        if (size < 0 && unknownFallback == 0)
+            unknownFallback = candidate;
+        if (size <= 0)
+            continue;
+        if (sizeFallback == 0)
+            sizeFallback = candidate;
+        // Prefer the first format that can actually reach the requested
+        // frame rate: raw YUYV is fine at small sizes but cannot keep up
+        // with high-resolution/high-fps capture, where MJPEG wins.
+        if (fpsSupport(candidate) > 0)
+            return candidate;
+    }
+    return sizeFallback != 0 ? sizeFallback : unknownFallback;
 }
 
 V4l2Camera::V4l2Camera(const Config& config)
@@ -130,37 +192,15 @@ V4l2Camera::V4l2Camera(const Config& config)
             supported.push_back(description.pixelformat);
         }
 
-        std::vector<std::uint32_t> candidates;
-        if (config.pixfmt == "auto") {
-            candidates = {V4L2_PIX_FMT_GREY, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_MJPEG};
-        } else {
-            candidates = {fourcc(config.pixfmt)};
-        }
-        std::uint32_t selected = 0;
-        std::uint32_t unknownSizeFallback = 0;
-        for (const auto candidate : candidates) {
-            if (std::find(supported.begin(), supported.end(), candidate) != supported.end()) {
 #ifndef PISCAN_HAVE_TURBOJPEG
-                if (candidate == V4L2_PIX_FMT_MJPEG)
-                    continue;
+        supported.erase(std::remove(supported.begin(), supported.end(), V4L2_PIX_FMT_MJPEG), supported.end());
 #endif
-                if (config.pixfmt != "auto") {
-                    selected = candidate;
-                    break;
-                }
-                const int sizeSupport =
-                    requestedSizeSupport(fd_, candidate, static_cast<std::uint32_t>(config.width),
-                                         static_cast<std::uint32_t>(config.height));
-                if (sizeSupport > 0) {
-                    selected = candidate;
-                    break;
-                }
-                if (sizeSupport < 0 && unknownSizeFallback == 0)
-                    unknownSizeFallback = candidate;
-            }
-        }
-        if (selected == 0)
-            selected = unknownSizeFallback;
+        const auto width = static_cast<std::uint32_t>(config.width);
+        const auto height = static_cast<std::uint32_t>(config.height);
+        const std::uint32_t selected = choosePixelFormat(
+            config, supported,
+            [&](std::uint32_t fmt) { return requestedSizeSupport(fd_, fmt, width, height); },
+            [&](std::uint32_t fmt) { return requestedFpsSupport(fd_, fmt, width, height, config.fps); });
         if (selected == 0) {
             if (config.pixfmt == "auto")
                 throw std::runtime_error("camera has no supported GREY, YUYV, or MJPEG format at the requested size");

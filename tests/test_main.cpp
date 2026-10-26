@@ -7,6 +7,7 @@
 #include "Output.h"
 #include "Scanner.h"
 #include "Trigger.h"
+#include "V4l2Camera.h"
 
 #include <atomic>
 #include <chrono>
@@ -465,6 +466,47 @@ void testDecodeCli(const char* executable)
 
 }
 
+// Pixel-format negotiation: auto prefers uncompressed formats but falls
+// through to MJPEG when raw formats cannot reach the requested fps.
+void testPixelFormatChoice()
+{
+    Config config;
+    config.pixfmt = "auto";
+    config.width = 1920;
+    config.height = 1080;
+    const auto yuyv = V4L2_PIX_FMT_YUYV;
+    const auto grey = V4L2_PIX_FMT_GREY;
+    const auto mjpeg = V4L2_PIX_FMT_MJPEG;
+    const std::vector<std::uint32_t> all{grey, yuyv, mjpeg};
+
+    // Brio-like: 1080p30 across all formats but YUYV caps at 30 fps, so a
+    // 90 fps request must pick MJPEG.
+    config.fps = 90;
+    auto capped30 = [](std::uint32_t f) { return f == V4L2_PIX_FMT_MJPEG ? 1 : 0; };
+    CHECK(choosePixelFormat(config, all, [](std::uint32_t) { return 1; }, capped30) == mjpeg);
+
+    // Same camera at 30 fps: keep the zero-copy YUYV path.
+    config.fps = 30;
+    CHECK(choosePixelFormat(config, all, [](std::uint32_t) { return 1; }, [](std::uint32_t) { return 1; }) == grey);
+
+    // fps unknown (-1): fall back to size preference order.
+    CHECK(choosePixelFormat(config, all, [](std::uint32_t) { return 1; }, [](std::uint32_t) { return -1; }) == grey);
+
+    // Nothing meets fps: still prefer a size-capable format.
+    config.fps = 240;
+    CHECK(choosePixelFormat(config, all, [](std::uint32_t) { return 1; }, [](std::uint32_t) { return 0; }) == grey);
+
+    // No YUYV/GREY: MJPEG wins.
+    CHECK(choosePixelFormat(config, {mjpeg}, [](std::uint32_t) { return 1; }, [](std::uint32_t) { return 1; }) == mjpeg);
+
+    // Unsupported everything: 0.
+    CHECK(choosePixelFormat(config, all, [](std::uint32_t) { return 0; }, [](std::uint32_t) { return -1; }) == 0);
+
+    // Explicit pixfmt is honored even when slow.
+    config.pixfmt = "mjpeg";
+    CHECK(choosePixelFormat(config, all, [](std::uint32_t) { return 0; }, [](std::uint32_t) { return -1; }) == mjpeg);
+}
+
 int main(int argc, char* argv[])
 {
     testBarcodeReaders();
@@ -472,6 +514,7 @@ int main(int argc, char* argv[])
     testMjpeg();
     testDedupe();
     testArguments();
+    testPixelFormatChoice();
     testJson();
     if (argc == 4) {
         g_dataDir = argv[3];
