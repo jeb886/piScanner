@@ -53,6 +53,7 @@ set(PISCAN_CORE_SOURCES
     src/Decoder.cpp
     src/Dedupe.cpp
     src/FileFrameSource.cpp
+    src/GpioBeeper.cpp
     src/GpioTrigger.cpp
     src/ImageFile.cpp
     src/Output.cpp

@@ -8,8 +8,11 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 
 - Raspberry Pi 5 and a UVC-compatible USB webcam (tested target: Logitech Brio, USB 3).
 - For the default trigger, connect a momentary switch between BCM GPIO17 (header pin 11) and GND (pin 9). The internal pull-up is enabled by default.
+- For the beeper, connect a 2-wire active buzzer between GPIO27 (pin 13, `+`) and GND (pin 14, `-`). Enable it with `--beeper-line 27` (set `--beeper-ms` for tone length).
 - GPIO is **3.3 V only**. Never connect a 5 V signal. Use an optocoupler for 12/24 V industrial triggers.
 - Add the user to the `video` and `gpio` groups for device access.
+
+![Physical wiring](docs/wiring.png)
 
 ## Quick start
 
@@ -59,7 +62,7 @@ piscan decode tests/data/qr --expect
 piscan bench sample.pgm --iterations 100
 ```
 
-`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. Diagnostics and optional statistics go to stderr.
+`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. With `--beeper-line N` a short beep follows every decoded result (the service default is GPIO27, 80 ms). Diagnostics and optional statistics go to stderr.
 
 `decode` prints each file's result; with `--expect` it compares against `<name>.txt` sidecars (`NONE` = no barcode expected) and exits non-zero on any mismatch. `scan`/`trigger` accept `--source IMG_OR_DIR` (repeatable) instead of `--device` to replay image files through the full pipeline at `--fps`, looping `--repeat N` times (0 = forever) — a mock camera for test automation.
 

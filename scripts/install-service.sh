@@ -123,7 +123,7 @@ else
     printf '%s\n' \
         "# Arguments passed to piscan by piscan.service. See \`piscan --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output hid"' >"$CONFIG_PATH"
+        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 27"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
