@@ -2,6 +2,8 @@
 
 `piscan` is a low-latency Raspberry Pi 5 barcode scanner for a generic UVC USB webcam and an external GPIO trigger. Results are sent to a CLI sink today; the sink interface leaves room for a display later.
 
+Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
+
 ## Hardware
 
 - Raspberry Pi 5 and a UVC-compatible USB webcam.
@@ -25,14 +27,20 @@ sudo ./scripts/install-service.sh
 
 Edit `/etc/default/piscan` to change the service arguments, then restart it with `sudo systemctl restart piscan`. Follow scan output with `journalctl -u piscan -f`; add `-o cat` to view raw JSON lines. To remove the service and installed binary, run `sudo ./scripts/install-service.sh --uninstall`.
 
+## First boot
+
+1. Flash the SD card with Raspberry Pi Imager; set the user, Wi-Fi and enable SSH in the Imager customization.
+2. `sudo apt update && sudo apt install -y git`
+3. Clone the repo (it's private — authenticate with `gh auth login` or an HTTPS personal access token):
+   `git clone https://github.com/jeb886/pi-project.git && cd pi-project`
+4. `./scripts/build.sh` then `sudo ./scripts/install-service.sh`
+
 ## Build
 
-On Raspberry Pi OS Bookworm or Trixie:
+Manual equivalent of `scripts/build.sh`:
 
 ```sh
-sudo apt install build-essential cmake git pkg-config libturbojpeg0-dev
-git clone https://github.com/jeb886/pi-project.git
-cd pi-project
+sudo apt install build-essential cmake git pkg-config libturbojpeg0-dev v4l-utils
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DPISCAN_NATIVE=ON
 cmake --build build -j4
 ```
