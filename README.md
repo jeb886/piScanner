@@ -9,6 +9,22 @@
 - GPIO is **3.3 V only**. Never connect a 5 V signal. Use an optocoupler for 12/24 V industrial triggers.
 - Add the user to the `video` and `gpio` groups for device access.
 
+## Quick start
+
+Build and test with:
+
+```sh
+./scripts/build.sh
+```
+
+Install and enable the systemd service:
+
+```sh
+sudo ./scripts/install-service.sh
+```
+
+Edit `/etc/default/piscan` to change the service arguments, then restart it with `sudo systemctl restart piscan`. Follow scan output with `journalctl -u piscan -f`; add `-o cat` to view raw JSON lines. To remove the service and installed binary, run `sudo ./scripts/install-service.sh --uninstall`.
+
 ## Build
 
 On Raspberry Pi OS Bookworm or Trixie:
