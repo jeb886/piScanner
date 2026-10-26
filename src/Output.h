@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iostream>
 #include <mutex>
+#include <memory>
 
 class ResultSink {
 public:
@@ -48,6 +49,20 @@ public:
 private:
     int fd_ = -1;
     std::mutex mutex_;
+};
+
+class GpioBeeper;
+
+// Decorates another sink: forwards the result and pulses the beeper.
+class BeepSink final : public ResultSink {
+public:
+    BeepSink(ResultSink& inner, GpioBeeper& beeper) : inner_(inner), beeper_(beeper) {}
+    void onResult(const ScanResult& result) override;
+    void onTimeout(std::uint64_t timestampUs) override;
+
+private:
+    ResultSink& inner_;
+    GpioBeeper& beeper_;
 };
 
 std::string jsonEscape(const std::string& input);

@@ -29,6 +29,8 @@ struct Config {
     std::optional<RegionOfInterest> roi;
     std::string output = "text";
     std::string hidDevice = "/dev/hidg0";
+    int beeperLine = -1;   // GPIO line for the beeper; -1 = disabled
+    int beeperMs = 80;     // beep duration
     bool stats = false;
     bool verbose = false;
     std::string trigger = "gpio";

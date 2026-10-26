@@ -77,6 +77,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_ROI,
         OPT_OUTPUT,
         OPT_HID_DEVICE,
+        OPT_BEEPER_LINE,
+        OPT_BEEPER_MS,
         OPT_STATS,
         OPT_TRIGGER,
         OPT_GPIO_CHIP,
@@ -114,6 +116,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"roi", required_argument, nullptr, OPT_ROI},
         {"output", required_argument, nullptr, OPT_OUTPUT},
         {"hid-device", required_argument, nullptr, OPT_HID_DEVICE},
+        {"beeper-line", required_argument, nullptr, OPT_BEEPER_LINE},
+        {"beeper-ms", required_argument, nullptr, OPT_BEEPER_MS},
         {"stats", no_argument, nullptr, OPT_STATS},
         {"verbose", no_argument, nullptr, 'v'},
         {"gpio-trigger", required_argument, nullptr, OPT_TRIGGER},
@@ -219,6 +223,14 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
             break;
         case OPT_HID_DEVICE:
             config.hidDevice = optarg;
+            break;
+        case OPT_BEEPER_LINE:
+            if (!assignInt("beeper-line", config.beeperLine))
+                return std::nullopt;
+            break;
+        case OPT_BEEPER_MS:
+            if (!assignInt("beeper-ms", config.beeperMs))
+                return std::nullopt;
             break;
         case OPT_STATS:
             config.stats = true;
@@ -345,6 +357,10 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         return std::nullopt;
     }
 #endif
+    if (config.beeperMs <= 0) {
+        error = "--beeper-ms must be > 0";
+        return std::nullopt;
+    }
     if (config.output != "text" && config.output != "json" && config.output != "hid") {
         error = "--output must be text, json, or hid";
         return std::nullopt;
@@ -401,7 +417,7 @@ std::string usageText()
            "Common options: --device PATH --width N --height N --fps N --pixfmt auto|yuyv|grey|mjpeg\n"
            "  --buffers N --threads N --formats LIST --try-harder --no-rotate --no-downscale\n"
            "  --max-symbols N --binarizer local|global|bool|fixed --roi x,y,w,h\n"
-           "  --output text|json|hid --hid-device PATH --stats --exposure N --focus N --gain N -v --help --version\n"
+           "  --output text|json|hid --hid-device PATH --beeper-line N --beeper-ms N --stats --exposure N --focus N --gain N -v --help --version\n"
            "Trigger options: --trigger gpio|stdin --gpio-chip PATH --gpio-line N --gpio-bias pull-up|pull-down|disable\n"
            "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
            "File source (scan/trigger, replaces the camera): --source IMG_OR_DIR (repeatable)\n"

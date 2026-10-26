@@ -1,5 +1,6 @@
 #include "Output.h"
 
+#include "GpioBeeper.h"
 #include "HidKeys.h"
 
 #include <chrono>
@@ -111,6 +112,17 @@ HidSink::~HidSink()
 {
     if (fd_ >= 0)
         close(fd_);
+}
+
+void BeepSink::onResult(const ScanResult& result)
+{
+    inner_.onResult(result);
+    beeper_.beep();
+}
+
+void BeepSink::onTimeout(std::uint64_t timestampUs)
+{
+    inner_.onTimeout(timestampUs);
 }
 
 void HidSink::onResult(const ScanResult& result)
