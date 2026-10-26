@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Config.h"
+#include "Frame.h"
 #include "Output.h"
-#include "V4l2Camera.h"
 #include "Trigger.h"
 
 #include <atomic>
@@ -11,7 +11,11 @@
 
 class Scanner {
 public:
-    Scanner(const Config& config, V4l2Camera& camera, ResultSink& sink, Trigger* trigger);
+    // sessionEvents (optional): atomically updated with the count of
+    // completed trigger scan sessions (result emitted or timeout).
+    // ScriptedTrigger uses it to press once per session, deterministically.
+    Scanner(const Config& config, FrameSource& source, ResultSink& sink, Trigger* trigger,
+            std::atomic<std::uint64_t>* sessionEvents = nullptr);
     ~Scanner();
     int run();
     const std::string& error() const;

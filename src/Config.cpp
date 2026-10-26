@@ -56,7 +56,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         return config;
     }
     if (config.command != "devices" && config.command != "scan" && config.command != "trigger" &&
-        config.command != "bench") {
+        config.command != "decode" && config.command != "bench") {
         error = "unknown subcommand: " + config.command;
         return std::nullopt;
     }
@@ -91,6 +91,9 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_FOCUS,
         OPT_GAIN,
         OPT_ITERATIONS,
+        OPT_SOURCE,
+        OPT_REPEAT,
+        OPT_EXPECT,
         OPT_VERSION
     };
     static const option options[] = {
@@ -126,6 +129,9 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"focus", required_argument, nullptr, OPT_FOCUS},
         {"gain", required_argument, nullptr, OPT_GAIN},
         {"iterations", required_argument, nullptr, OPT_ITERATIONS},
+        {"source", required_argument, nullptr, OPT_SOURCE},
+        {"repeat", required_argument, nullptr, OPT_REPEAT},
+        {"expect", no_argument, nullptr, OPT_EXPECT},
         {"help", no_argument, nullptr, 'h'},
         {"version", no_argument, nullptr, OPT_VERSION},
         {nullptr, 0, nullptr, 0},
@@ -271,6 +277,16 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
             if (!assignInt("iterations", config.iterations))
                 return std::nullopt;
             break;
+        case OPT_SOURCE:
+            config.source.emplace_back(optarg);
+            break;
+        case OPT_REPEAT:
+            if (!assignInt("repeat", config.repeat))
+                return std::nullopt;
+            break;
+        case OPT_EXPECT:
+            config.expect = true;
+            break;
         case OPT_VERSION:
             config.command = "version";
             return config;
@@ -289,6 +305,13 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         config.benchFile = argv[optind++];
         if (optind < argc) {
             error = "unexpected positional argument: " + std::string(argv[optind]);
+            return std::nullopt;
+        }
+    } else if (config.command == "decode") {
+        while (optind < argc)
+            config.decodeInputs.emplace_back(argv[optind++]);
+        if (config.decodeInputs.empty()) {
+            error = "decode requires at least one image file or directory";
             return std::nullopt;
         }
     } else if (optind < argc) {
@@ -330,6 +353,18 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         error = "--trigger must be gpio or stdin";
         return std::nullopt;
     }
+    if (config.repeat < 0) {
+        error = "--repeat must be >= 0 (0 means loop forever)";
+        return std::nullopt;
+    }
+    if (!config.source.empty() && config.command != "scan" && config.command != "trigger") {
+        error = "--source is only valid with scan or trigger";
+        return std::nullopt;
+    }
+    if (config.expect && config.command != "decode") {
+        error = "--expect is only valid with decode";
+        return std::nullopt;
+    }
     if (config.gpioBias != "pull-up" && config.gpioBias != "pull-down" && config.gpioBias != "disable") {
         error = "--gpio-bias must be pull-up, pull-down, or disable";
         return std::nullopt;
@@ -355,6 +390,7 @@ std::string usageText()
            "  piscan devices\n"
            "  piscan scan [options]\n"
            "  piscan trigger [options]\n"
+           "  piscan decode <files/dirs> [--expect] [decoder options]\n"
            "  piscan bench <file.pgm> [--iterations N] [decoder options]\n"
            "\n"
            "Common options: --device PATH --width N --height N --fps N --pixfmt auto|yuyv|grey|mjpeg\n"
@@ -362,5 +398,8 @@ std::string usageText()
            "  --max-symbols N --binarizer local|global|bool|fixed --roi x,y,w,h\n"
            "  --output text|json --stats --exposure N --focus N --gain N -v --help --version\n"
            "Trigger options: --trigger gpio|stdin --gpio-chip PATH --gpio-line N --gpio-bias pull-up|pull-down|disable\n"
-           "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n";
+           "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
+           "File source (scan/trigger, replaces the camera): --source IMG_OR_DIR (repeatable)\n"
+           "  --repeat N (passes over the images, 0=forever). decode: compares to <name>.txt\n"
+           "  sidecars with --expect (sidecar text NONE means no barcode expected).\n";
 }

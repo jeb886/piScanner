@@ -1,13 +1,26 @@
 #include "Config.h"
+#include "DecodeFiles.h"
 #include "Decoder.h"
 #include "Dedupe.h"
+#include "FileFrameSource.h"
+#include "ImageFile.h"
 #include "Output.h"
+#include "Scanner.h"
+#include "Trigger.h"
+
+#include <atomic>
+#include <chrono>
+#include <mutex>
+#include <set>
+#include <sstream>
+#include <thread>
 
 #include <CreateBarcode.h>
 #include <WriteBarcode.h>
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -31,11 +44,6 @@ int failures = 0;
         }                                                                                                              \
     } while (false)
 
-struct GrayImage {
-    int width = 0;
-    int height = 0;
-    std::vector<std::uint8_t> pixels;
-};
 
 GrayImage barcodeFrame(const std::string& text, ZXing::BarcodeFormat format, int x = -1)
 {
@@ -224,6 +232,237 @@ void testBench(const char* executable, const char* pgmPath)
     CHECK(std::system(command.c_str()) == 0);
 }
 
+// --- File source / real-image tests ---------------------------------------
+
+std::string g_dataDir;
+
+std::set<std::string> expectedTexts(const std::string& dir)
+{
+    std::set<std::string> out;
+    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        if (entry.path().extension() != ".txt")
+            continue;
+        std::ifstream in(entry.path());
+        std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        while (!text.empty() && (text.back() == '\n' || text.back() == '\r'))
+            text.pop_back();
+        if (!text.empty() && text != "NONE")
+            out.insert(text);
+    }
+    return out;
+}
+
+Config fileConfig(const std::string& command, const std::string& pixfmt, int repeat)
+{
+    Config config;
+    config.command = command;
+    config.pixfmt = pixfmt;
+    config.repeat = repeat;
+    config.buffers = 8;
+    config.threads = 2;
+    return config;
+}
+
+class CollectingSink : public ResultSink {
+public:
+    void onResult(const ScanResult& result) override
+    {
+        std::lock_guard lock(mutex_);
+        results.push_back(result);
+    }
+    void onTimeout(std::uint64_t timestampUs) override
+    {
+        std::lock_guard lock(mutex_);
+        timeouts.push_back(timestampUs);
+    }
+    std::mutex mutex_;
+    std::vector<ScanResult> results;
+    std::vector<std::uint64_t> timeouts;
+};
+
+void testFileFrameSource()
+{
+    const std::string dir = g_dataDir + "/qr";
+    auto config = fileConfig("scan", "auto", 1);
+    FileFrameSource source({dir}, config);
+    const auto expected = expectedTexts(dir);
+    CHECK(source.paths().size() == 10);
+    Frame frame;
+    int index = -1;
+    int count = 0;
+    // dequeue() may time out on paced frames — poll until the source drains.
+    while (!source.exhausted()) {
+        if (!source.dequeue(frame, index, 10))
+            continue;
+        ++count;
+        CHECK(frame.fmt == PixelFormat::GREY);
+        CHECK(frame.width > 0 && frame.height > 0 && frame.stride >= frame.width);
+        source.requeue(index);
+    }
+    CHECK(count == static_cast<int>(source.paths().size()));
+    CHECK(source.exhausted());
+
+    // Every image decodes to its sidecar text straight through the source.
+    Config decodeConfig;
+    Decoder decoder(decodeConfig);
+    auto source2 = fileConfig("scan", "auto", 1);
+    FileFrameSource fresh({dir}, source2);
+    std::set<std::string> decoded;
+    while (!fresh.exhausted()) {
+        if (!fresh.dequeue(frame, index, 10))
+            continue;
+        for (const auto& result : decoder.decode(frame))
+            decoded.insert(result.text);
+    }
+    for (const auto& text : expected)
+        CHECK(decoded.count(text) == 1);
+}
+
+void testFileFrameSourceFormats()
+{
+    const std::string dir = g_dataDir + "/qr";
+    for (const char* fmt : {"yuyv", "mjpeg"}) {
+        auto config = fileConfig("scan", fmt, 1);
+        FileFrameSource source({dir}, config);
+        Config decodeConfig;
+        Decoder decoder(decodeConfig);
+        Frame frame;
+        int index = -1;
+        int decoded = 0;
+        while (!source.exhausted()) {
+            if (!source.dequeue(frame, index, 10))
+                continue;
+            CHECK((fmt == std::string("yuyv") ? frame.fmt == PixelFormat::YUYV : frame.fmt == PixelFormat::MJPEG));
+            if (!decoder.decode(frame).empty())
+                ++decoded;
+        }
+        CHECK(decoded == static_cast<int>(source.paths().size()));
+    }
+}
+
+void testDecodeExpect()
+{
+    std::ostringstream sink;
+    Config config;
+    config.command = "decode";
+    config.expect = true;
+    config.decodeInputs = {g_dataDir + "/upca", g_dataDir + "/qr"};
+    CHECK(runDecodeFiles(config, sink) == 0);
+
+    config.decodeInputs = {g_dataDir + "/negative"};
+    sink.str("");
+    CHECK(runDecodeFiles(config, sink) == 0);
+
+    // Hard set fails under default options, passes with try-harder.
+    config.decodeInputs = {g_dataDir + "/hard"};
+    sink.str("");
+    CHECK(runDecodeFiles(config, sink) == 1);
+    config.tryHarder = true;
+    sink.str("");
+    CHECK(runDecodeFiles(config, sink) == 0);
+
+    // Tampered sidecar must fail.
+    const std::string victim = g_dataDir + "/qr";
+    Config bad;
+    bad.command = "decode";
+    bad.expect = true;
+    const auto png = victim + "/qrcode-1_1.png";
+    const auto txt = expectedTextPath(png);
+    const auto backup = loadFileBytes(txt);
+    {
+        std::ofstream overwrite(txt);
+        overwrite << "wrong-text";
+    }
+    bad.decodeInputs = {png};
+    sink.str("");
+    const int rc = runDecodeFiles(bad, sink);
+    {
+        std::ofstream restore(txt, std::ios::binary);
+        restore.write(reinterpret_cast<const char*>(backup.data()), backup.size());
+    }
+    CHECK(rc == 1);
+    CHECK(sink.str().find("FAIL") != std::string::npos);
+}
+
+void testScannerWithFileSource()
+{
+    const std::string dir = g_dataDir + "/qr";
+    for (const char* fmt : {"auto", "yuyv"}) {
+        auto config = fileConfig("scan", fmt, 1);
+        config.dedupeMs = 0;
+        FileFrameSource source({dir}, config);
+        CollectingSink sink;
+        Scanner scanner(config, source, sink, nullptr);
+        CHECK(scanner.run() == 0);
+        std::set<std::string> emitted;
+        for (const auto& result : sink.results)
+            emitted.insert(result.text);
+        for (const auto& text : expectedTexts(dir)) {
+            if (emitted.count(text) != 1)
+                std::cerr << "missing decoded text from " << fmt << " pipeline: " << text << '\n';
+            CHECK(emitted.count(text) == 1);
+        }
+    }
+}
+
+void testTriggerWithFileSource()
+{
+    // Press on every frame: each QR image produces one result.
+    const std::string dir = g_dataDir + "/qr";
+    auto config = fileConfig("trigger", "auto", 1);
+    config.dedupeMs = 0; // two images share a text; we want every frame counted
+    FileFrameSource source({dir}, config);
+    CollectingSink sink;
+    std::atomic<std::uint64_t> sessions{0};
+    ScriptedTrigger trigger(sessions, static_cast<int>(source.paths().size()));
+    Scanner scanner(config, source, sink, &trigger, &sessions);
+    CHECK(scanner.run() == 0);
+    std::set<std::string> emitted;
+    for (const auto& result : sink.results)
+        emitted.insert(result.text);
+    const auto expected = expectedTexts(dir);
+    for (const auto& text : expected) {
+        if (emitted.count(text) != 1)
+            std::cerr << "trigger pipeline missing text: " << text.substr(0, 60) << '\n';
+        CHECK(emitted.count(text) == 1);
+    }
+
+    // Negative-only source: a press times out instead of producing a result.
+    auto neg = fileConfig("trigger", "auto", 0);
+    neg.scanTimeoutMs = 300;
+    FileFrameSource negSource({g_dataDir + "/negative"}, neg);
+    CollectingSink negSink;
+    std::atomic<std::uint64_t> negSessions{0};
+    ScriptedTrigger negTrigger(negSessions, 1); // press once, then wait
+    Scanner negScanner(neg, negSource, negSink, &negTrigger, &negSessions);
+    std::thread runner([&] { negScanner.run(); });
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    for (;;) {
+        {
+            std::lock_guard lock(negSink.mutex_);
+            if (!negSink.timeouts.empty())
+                break;
+        }
+        if (std::chrono::steady_clock::now() >= deadline)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    requestShutdownSignal(0);
+    runner.join();
+    CHECK(!negSink.timeouts.empty());
+    CHECK(negSink.results.empty());
+}
+
+void testDecodeCli(const char* executable)
+{
+    const std::string pass = std::string("\"") + executable + "\" decode \"" + g_dataDir +
+                             "/qr\" --expect > /dev/null";
+    CHECK(std::system(pass.c_str()) == 0);
+    const std::string fail = std::string("\"") + executable + "\" decode \"" + g_dataDir +
+                             "/hard\" --expect > /dev/null";
+    CHECK(std::system(fail.c_str()) == 256); // exit code 1
+}
+
 }
 
 int main(int argc, char* argv[])
@@ -234,10 +473,18 @@ int main(int argc, char* argv[])
     testDedupe();
     testArguments();
     testJson();
-    if (argc == 3)
+    if (argc == 4) {
+        g_dataDir = argv[3];
+        testFileFrameSource();
+        testFileFrameSourceFormats();
+        testDecodeExpect();
+        testScannerWithFileSource();
+        testTriggerWithFileSource();
+        testDecodeCli(argv[1]);
         testBench(argv[1], argv[2]);
-    else
+    } else {
         CHECK(false);
+    }
     if (failures != 0)
         std::cerr << failures << " test assertion(s) failed\n";
     return failures == 0 ? 0 : 1;

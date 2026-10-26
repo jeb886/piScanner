@@ -55,10 +55,13 @@ piscan scan --device /dev/video0
 piscan scan --width 640 --height 480 --pixfmt yuyv --formats QRCode,Code128 --stats
 piscan trigger --gpio-line 17
 piscan trigger --trigger stdin --output json
+piscan decode tests/data/qr --expect
 piscan bench sample.pgm --iterations 100
 ```
 
 `scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default or one JSON object per line with `--output json`. Diagnostics and optional statistics go to stderr.
+
+`decode` prints each file's result; with `--expect` it compares against `<name>.txt` sidecars (`NONE` = no barcode expected) and exits non-zero on any mismatch. `scan`/`trigger` accept `--source IMG_OR_DIR` (repeatable) instead of `--device` to replay image files through the full pipeline at `--fps`, looping `--repeat N` times (0 = forever) — a mock camera for test automation.
 
 ## Performance
 

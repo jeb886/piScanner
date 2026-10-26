@@ -8,15 +8,15 @@
 #include <string>
 #include <vector>
 
-class V4l2Camera {
+class V4l2Camera : public FrameSource {
 public:
     explicit V4l2Camera(const Config& config);
     ~V4l2Camera();
     V4l2Camera(const V4l2Camera&) = delete;
     V4l2Camera& operator=(const V4l2Camera&) = delete;
 
-    bool dequeue(Frame& frame, int& index, int timeoutMs);
-    void requeue(int index);
+    bool dequeue(Frame& frame, int& index, int timeoutMs) override;
+    void requeue(int index) override;
     static void listDevices();
 
 private:
