@@ -1,6 +1,6 @@
 [Unit]
 Description=piscan barcode scanner
-After=local-fs.target systemd-udev-settle.service
+After=local-fs.target
 
 [Service]
 Type=simple

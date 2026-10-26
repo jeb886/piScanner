@@ -49,9 +49,12 @@ endif()
 set(PISCAN_CORE_SOURCES
     src/Bench.cpp
     src/Config.cpp
+    src/DecodeFiles.cpp
     src/Decoder.cpp
     src/Dedupe.cpp
+    src/FileFrameSource.cpp
     src/GpioTrigger.cpp
+    src/ImageFile.cpp
     src/Output.cpp
     src/Scanner.cpp
     src/V4l2Camera.cpp
@@ -60,6 +63,7 @@ set(PISCAN_CORE_SOURCES
 add_library(piscan_core STATIC ${PISCAN_CORE_SOURCES})
 target_compile_features(piscan_core PUBLIC cxx_std_20)
 target_include_directories(piscan_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_include_directories(piscan_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 target_link_libraries(piscan_core PUBLIC ZXing::ZXing Threads::Threads)
 
 add_executable(piscan src/main.cpp)
@@ -91,5 +95,6 @@ if(PISCAN_BUILD_TESTS)
     add_test(
         NAME piscan_tests
         COMMAND piscan_tests "$<TARGET_FILE:piscan>" "${CMAKE_CURRENT_BINARY_DIR}/bench-smoke.pgm"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/data"
     )
 endif()

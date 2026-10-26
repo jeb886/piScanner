@@ -38,7 +38,8 @@ void requestShutdownSignal(int)
 
 struct Scanner::Impl {
     const Config& config;
-    V4l2Camera& camera;
+    FrameSource& camera;
+    std::atomic<std::uint64_t>* sessionEvents;
     ResultSink& sink;
     Trigger* trigger;
     mutable std::mutex mutex;
@@ -61,8 +62,10 @@ struct Scanner::Impl {
     std::atomic<double> decodeTotalMs{0};
     std::atomic<double> decodeMaxMs{0};
 
-    Impl(const Config& cfg, V4l2Camera& cam, ResultSink& output, Trigger* input)
-        : config(cfg), camera(cam), sink(output), trigger(input), slots(static_cast<std::size_t>(cfg.threads))
+    Impl(const Config& cfg, FrameSource& cam, ResultSink& output, Trigger* input,
+         std::atomic<std::uint64_t>* sessions)
+        : config(cfg), camera(cam), sessionEvents(sessions), sink(output), trigger(input),
+          slots(static_cast<std::size_t>(cfg.threads))
     {
         armed = config.command == "scan";
     }
@@ -98,6 +101,17 @@ struct Scanner::Impl {
             while (!stop.load() && !shutdownRequested) {
                 Frame frame;
                 int index = -1;
+                // Sources that pause while disarmed (file mocks) hold back
+                // production until a session is armed so each press maps
+                // onto the next frame.
+                if (config.command == "trigger" && camera.waitsWhileDisarmed()) {
+                    std::unique_lock lock(mutex);
+                    if (!armed) {
+                        lock.unlock();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                        continue;
+                    }
+                }
                 if (!camera.dequeue(frame, index, 100))
                     continue;
                 captured.fetch_add(1);
@@ -180,8 +194,11 @@ struct Scanner::Impl {
                         }
                     }
                 }
-                if (emitted)
+                if (emitted) {
                     sink.onResult(*emitted);
+                    if (sessionEvents && config.command == "trigger")
+                        sessionEvents->fetch_add(1);
+                }
             }
 
             try {
@@ -235,6 +252,16 @@ struct Scanner::Impl {
 
         auto nextStats = std::chrono::steady_clock::now() + std::chrono::seconds(1);
         while (!shutdownRequested && !failed.load()) {
+            // File sources terminate: once drained, wait for outstanding
+            // work to finish, then stop.
+            if (camera.exhausted()) {
+                std::lock_guard lock(mutex);
+                const bool idle = !pending && std::all_of(slots.begin(), slots.end(), [](const WorkerSlot& s) {
+                    return !s.busy;
+                });
+                if (idle)
+                    break;
+            }
             if (config.command == "trigger" && trigger != nullptr) {
                 TriggerEvent event;
                 try {
@@ -265,8 +292,11 @@ struct Scanner::Impl {
                         discardPendingLocked();
                     }
                 }
-                if (expiredTimestamp != 0)
+                if (expiredTimestamp != 0) {
                     sink.onTimeout(expiredTimestamp);
+                    if (sessionEvents)
+                        sessionEvents->fetch_add(1);
+                }
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(25));
             }
@@ -297,8 +327,9 @@ struct Scanner::Impl {
     }
 };
 
-Scanner::Scanner(const Config& config, V4l2Camera& camera, ResultSink& sink, Trigger* trigger)
-    : impl_(std::make_unique<Impl>(config, camera, sink, trigger))
+Scanner::Scanner(const Config& config, FrameSource& source, ResultSink& sink, Trigger* trigger,
+                 std::atomic<std::uint64_t>* sessionEvents)
+    : impl_(std::make_unique<Impl>(config, source, sink, trigger, sessionEvents))
 {
 }
 

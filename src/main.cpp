@@ -1,5 +1,7 @@
 #include "Bench.h"
 #include "Config.h"
+#include "DecodeFiles.h"
+#include "FileFrameSource.h"
 #include "GpioTrigger.h"
 #include "Output.h"
 #include "Scanner.h"
@@ -45,6 +47,14 @@ int main(int argc, char* argv[])
             return 1;
         }
     }
+    if (config.command == "decode") {
+        try {
+            return runDecodeFiles(config, std::cout);
+        } catch (const std::exception& exception) {
+            std::cerr << "error: " << exception.what() << '\n';
+            return 1;
+        }
+    }
 
     std::unique_ptr<Trigger> trigger;
     try {
@@ -54,7 +64,11 @@ int main(int argc, char* argv[])
             else
                 trigger = std::make_unique<StdinTrigger>();
         }
-        V4l2Camera camera(config);
+        std::unique_ptr<FrameSource> source;
+        if (config.source.empty())
+            source = std::make_unique<V4l2Camera>(config);
+        else
+            source = std::make_unique<FileFrameSource>(config.source, config);
         std::unique_ptr<ResultSink> sink;
         if (config.output == "json")
             sink = std::make_unique<JsonSink>(config.command == "trigger");
@@ -62,7 +76,7 @@ int main(int argc, char* argv[])
             sink = std::make_unique<TextSink>();
         std::signal(SIGINT, requestShutdownSignal);
         std::signal(SIGTERM, requestShutdownSignal);
-        Scanner scanner(config, camera, *sink, trigger.get());
+        Scanner scanner(config, *source, *sink, trigger.get());
         return scanner.run();
     } catch (const std::exception& exception) {
         std::cerr << "error: " << exception.what() << '\n';
