@@ -6,7 +6,7 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 
 ## Hardware
 
-- Raspberry Pi 5 and a UVC-compatible USB webcam.
+- Raspberry Pi 5 and a UVC-compatible USB webcam (tested target: Logitech Brio, USB 3).
 - For the default trigger, connect a momentary switch between BCM GPIO17 (header pin 11) and GND (pin 9). The internal pull-up is enabled by default.
 - GPIO is **3.3 V only**. Never connect a 5 V signal. Use an optocoupler for 12/24 V industrial triggers.
 - Add the user to the `video` and `gpio` groups for device access.
@@ -67,7 +67,9 @@ piscan bench sample.pgm --iterations 100
 
 - Restrict `--formats` to the symbologies actually used; leave `--try-harder` off for speed.
 - Try 640x480 or 1280x720 and measure with `--stats`.
-- YUYV decoding uses the camera's luma bytes without copying. USB 2 bandwidth often limits uncompressed 720p to around 10 fps, so MJPEG can be faster overall; measure both.
+- `--pixfmt auto` prefers uncompressed formats but picks MJPEG when raw formats cannot deliver the requested `--fps` at the requested size. On a Brio, 1080p and high frame rates (e.g. `--size 1920x1080 --fps 90`) are MJPEG-only — the Brio doesn't offer fast raw modes there. Raw 1080p YUYV is ~4 MB/frame, too much for high fps even on USB 3.
+- YUYV decoding uses the camera's luma bytes without copying. MJPEG frames are decompressed gray-only with libturbojpeg; measure both paths with `--stats`.
+- Perf regression numbers: `ctest -R piscan_perf_tests --output-on-failure` reports mean/p50/p99 decode time at 640x480/720p/1080p, the MJPEG decompress path, the real-photo sample set, and end-to-end trigger-to-result latency.
 - Use a fixed, short exposure to reduce motion blur, crop with `--roi x,y,w,h`, and set the CPU governor to `performance` for sustained scanning.
 
 ## Architecture
