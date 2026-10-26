@@ -59,9 +59,22 @@ piscan decode tests/data/qr --expect
 piscan bench sample.pgm --iterations 100
 ```
 
-`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default or one JSON object per line with `--output json`. Diagnostics and optional statistics go to stderr.
+`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. Diagnostics and optional statistics go to stderr.
 
 `decode` prints each file's result; with `--expect` it compares against `<name>.txt` sidecars (`NONE` = no barcode expected) and exits non-zero on any mismatch. `scan`/`trigger` accept `--source IMG_OR_DIR` (repeatable) instead of `--device` to replay image files through the full pipeline at `--fps`, looping `--repeat N` times (0 = forever) — a mock camera for test automation.
+
+## USB keyboard-wedge mode
+
+`install-service.sh` also configures the Pi's USB-C port as a USB gadget, so the Pi enumerates as a standard USB keyboard on whatever PC it is plugged into (no drivers needed on Windows, macOS, or Linux). Pressing the GPIO trigger scans a barcode and piscan types the decoded text plus Enter, like a commercial scanner wedge. The install:
+
+- adds `dtoverlay=dwc3,dr_mode=peripheral` to `config.txt` (one reboot needed on first install),
+- loads `libcomposite` and runs `piscan-gadget.service` at boot, which creates a keyboard gadget on `/dev/hidg0` via configfs,
+- installs a udev rule so the unprivileged `piscan` service user can write it,
+- defaults the service to `trigger --trigger gpio --output hid`.
+
+Point the Brio at a barcode, press the trigger, and the text appears wherever the cursor is (open Notepad to verify). Non-US-ASCII characters that have no single-key mapping are skipped; the layout is US-QWERTY. Use `--output json` in `/etc/default/piscan` if you'd rather have journal output, and run `piscan --output text` manually for interactive use.
+
+Note: the PC will also supply power over that cable; a Brio plus a running Pi 5 can exceed a port's budget, so powering the Pi through a separate 5 V supply is recommended.
 
 ## Performance
 

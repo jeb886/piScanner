@@ -1,6 +1,6 @@
 [Unit]
 Description=piscan barcode scanner
-After=local-fs.target
+After=local-fs.target piscan-gadget.service
 
 [Service]
 Type=simple

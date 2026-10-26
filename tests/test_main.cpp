@@ -3,6 +3,7 @@
 #include "Decoder.h"
 #include "Dedupe.h"
 #include "FileFrameSource.h"
+#include "HidKeys.h"
 #include "ImageFile.h"
 #include "Output.h"
 #include "Scanner.h"
@@ -207,6 +208,37 @@ void testArguments()
     CHECK(!parse({"piscan", "scan", "--threads", "3", "--buffers", "4"}, error).has_value());
     CHECK(!parse({"piscan", "scan", "--roi", "0.8,0,0.5,1"}, error).has_value());
     CHECK(!parse({"piscan", "scan", "--pixfmt", "bad"}, error).has_value());
+    auto hid = parse({"piscan", "scan", "--output", "hid", "--hid-device", "/dev/hidg3"}, error);
+    CHECK(hid.has_value());
+    if (hid) {
+        CHECK(hid->output == "hid");
+        CHECK(hid->hidDevice == "/dev/hidg3");
+    }
+    CHECK(!parse({"piscan", "scan", "--output", "bogus"}, error).has_value());
+}
+
+// Every character of a representative barcode charset must map to a keycode,
+// and the shifted digits must match US-QWERTY.
+void testHidKeys()
+{
+    std::uint8_t keycode = 0;
+    std::uint8_t modifier = 0;
+    for (const char ch : std::string("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz -./$+%")) {
+        CHECK(hidKeyForChar(static_cast<unsigned char>(ch), keycode, modifier));
+    }
+    CHECK(hidKeyForChar('a', keycode, modifier) && keycode == 0x04 && modifier == 0);
+    CHECK(hidKeyForChar('A', keycode, modifier) && keycode == 0x04 && modifier == 1);
+    CHECK(hidKeyForChar('5', keycode, modifier) && keycode == 0x22 && modifier == 0);
+    CHECK(hidKeyForChar('%', keycode, modifier) && keycode == 0x22 && modifier == 1);
+    CHECK(hidKeyForChar('0', keycode, modifier) && keycode == 0x27 && modifier == 0);
+    CHECK(hidKeyForChar('(', keycode, modifier) && keycode == 0x26 && modifier == 1);
+    CHECK(hidKeyForChar(')', keycode, modifier) && keycode == 0x27 && modifier == 1);
+    CHECK(hidKeyForChar('!', keycode, modifier) && keycode == 0x1E && modifier == 1);
+    CHECK(hidKeyForChar('"', keycode, modifier) && keycode == 0x34 && modifier == 1);
+    CHECK(hidKeyForChar('\'', keycode, modifier) && keycode == 0x34 && modifier == 0);
+    CHECK(hidKeyForChar(' ', keycode, modifier) && keycode == 0x2C);
+    CHECK(hidKeyForChar('\n', keycode, modifier) && keycode == 0x28);
+    CHECK(!hidKeyForChar(static_cast<unsigned char>(0xC3), keycode, modifier));
 }
 
 void testJson()
@@ -514,6 +546,7 @@ int main(int argc, char* argv[])
     testMjpeg();
     testDedupe();
     testArguments();
+    testHidKeys();
     testPixelFormatChoice();
     testJson();
     if (argc == 4) {
