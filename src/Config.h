@@ -28,6 +28,7 @@ struct Config {
     std::string binarizer = "local";
     std::optional<RegionOfInterest> roi;
     std::string output = "text";
+    std::string hidDevice = "/dev/hidg0";
     bool stats = false;
     bool verbose = false;
     std::string trigger = "gpio";

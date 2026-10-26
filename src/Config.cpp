@@ -76,6 +76,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_BINARIZER,
         OPT_ROI,
         OPT_OUTPUT,
+        OPT_HID_DEVICE,
         OPT_STATS,
         OPT_TRIGGER,
         OPT_GPIO_CHIP,
@@ -112,6 +113,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"binarizer", required_argument, nullptr, OPT_BINARIZER},
         {"roi", required_argument, nullptr, OPT_ROI},
         {"output", required_argument, nullptr, OPT_OUTPUT},
+        {"hid-device", required_argument, nullptr, OPT_HID_DEVICE},
         {"stats", no_argument, nullptr, OPT_STATS},
         {"verbose", no_argument, nullptr, 'v'},
         {"gpio-trigger", required_argument, nullptr, OPT_TRIGGER},
@@ -214,6 +216,9 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         }
         case OPT_OUTPUT:
             config.output = optarg;
+            break;
+        case OPT_HID_DEVICE:
+            config.hidDevice = optarg;
             break;
         case OPT_STATS:
             config.stats = true;
@@ -340,8 +345,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         return std::nullopt;
     }
 #endif
-    if (config.output != "text" && config.output != "json") {
-        error = "--output must be text or json";
+    if (config.output != "text" && config.output != "json" && config.output != "hid") {
+        error = "--output must be text, json, or hid";
         return std::nullopt;
     }
     if (config.binarizer != "local" && config.binarizer != "global" && config.binarizer != "bool" &&
@@ -396,7 +401,7 @@ std::string usageText()
            "Common options: --device PATH --width N --height N --fps N --pixfmt auto|yuyv|grey|mjpeg\n"
            "  --buffers N --threads N --formats LIST --try-harder --no-rotate --no-downscale\n"
            "  --max-symbols N --binarizer local|global|bool|fixed --roi x,y,w,h\n"
-           "  --output text|json --stats --exposure N --focus N --gain N -v --help --version\n"
+           "  --output text|json|hid --hid-device PATH --stats --exposure N --focus N --gain N -v --help --version\n"
            "Trigger options: --trigger gpio|stdin --gpio-chip PATH --gpio-line N --gpio-bias pull-up|pull-down|disable\n"
            "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
            "File source (scan/trigger, replaces the camera): --source IMG_OR_DIR (repeatable)\n"

@@ -72,6 +72,8 @@ int main(int argc, char* argv[])
         std::unique_ptr<ResultSink> sink;
         if (config.output == "json")
             sink = std::make_unique<JsonSink>(config.command == "trigger");
+        else if (config.output == "hid")
+            sink = std::make_unique<HidSink>(config.hidDevice);
         else
             sink = std::make_unique<TextSink>();
         std::signal(SIGINT, requestShutdownSignal);

@@ -68,10 +68,14 @@ DROPIN_PATH="$DROPIN_DIR/groups.conf"
 CONFIG_PATH=/etc/default/piscan
 BINARY_PATH=/usr/local/bin/piscan
 
+UDEV_RULE=/etc/udev/rules.d/99-piscan-hidg.rules
+
 if ((UNINSTALL)); then
     systemctl disable --now piscan.service >/dev/null 2>&1 || true
-    rm -f -- "$UNIT_PATH" "$BINARY_PATH"
+    "$REPO_ROOT/scripts/setup-hid-gadget.sh" --uninstall || true
+    rm -f -- "$UNIT_PATH" "$BINARY_PATH" "$UDEV_RULE"
     rm -rf -- "$DROPIN_DIR"
+    udevadm control --reload-rules 2>/dev/null || true
     systemctl daemon-reload
     printf '%s\n' 'Removed piscan.service and /usr/local/bin/piscan.'
     printf 'Kept %s and the piscan system user. Remove them manually if desired: sudo rm -f %s; sudo userdel piscan\n' \
@@ -119,10 +123,18 @@ else
     printf '%s\n' \
         "# Arguments passed to piscan by piscan.service. See \`piscan --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output json"' >"$CONFIG_PATH"
+        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output hid"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
+
+# USB HID gadget: lets the piscan system user write /dev/hidg0 and wires
+# the gadget unit in before the scanner starts.
+"$REPO_ROOT/scripts/setup-hid-gadget.sh"
+install -D -m 0644 /dev/stdin "$UDEV_RULE" <<'EOF'
+KERNEL=="hidg*", MODE="0660", GROUP="piscan", TAG+="systemd"
+EOF
+udevadm control --reload-rules 2>/dev/null || true
 
 install -D -m 0644 -- "$REPO_ROOT/systemd/piscan.service" "$UNIT_PATH"
 mkdir -p -- "$DROPIN_DIR"

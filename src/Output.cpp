@@ -1,6 +1,15 @@
 #include "Output.h"
 
+#include "HidKeys.h"
+
+#include <chrono>
+#include <cstring>
+#include <fcntl.h>
 #include <iomanip>
+#include <stdexcept>
+#include <system_error>
+#include <thread>
+#include <unistd.h>
 #include <sstream>
 #include <time.h>
 
@@ -57,6 +66,63 @@ void TextSink::onTimeout(std::uint64_t)
 {
     std::lock_guard lock(mutex_);
     std::cout << "timeout\n" << std::flush;
+}
+
+namespace {
+
+// 6-key-roll-over boot-protocol keyboard report: modifiers, reserved, keys.
+void sendReport(int fd, std::uint8_t modifier, std::uint8_t keycode)
+{
+    const std::uint8_t report[8] = {modifier, 0, keycode, 0, 0, 0, 0, 0};
+    if (write(fd, report, sizeof(report)) != static_cast<ssize_t>(sizeof(report)))
+        throw std::system_error(errno, std::generic_category(), "write to HID gadget failed");
+}
+
+void typeChar(int fd, char ch)
+{
+    std::uint8_t keycode = 0;
+    std::uint8_t modifier = 0;
+    if (!hidKeyForChar(static_cast<unsigned char>(ch), keycode, modifier))
+        return; // untypeable character: skip it
+    sendReport(fd, modifier, keycode);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    sendReport(fd, 0, 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+}
+
+}
+
+HidSink::HidSink(const std::string& device)
+{
+    // /dev/hidg0 appears only after the gadget service enumerates it; the
+    // piscan unit can race it on boot, so wait a while before failing.
+    for (int attempt = 0; attempt < 60; ++attempt) {
+        fd_ = open(device.c_str(), O_WRONLY | O_CLOEXEC);
+        if (fd_ >= 0)
+            return;
+        if (errno != ENOENT && errno != EACCES && errno != ENODEV)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    throw std::runtime_error("cannot open " + device + " for HID output (is the USB gadget configured?)");
+}
+
+HidSink::~HidSink()
+{
+    if (fd_ >= 0)
+        close(fd_);
+}
+
+void HidSink::onResult(const ScanResult& result)
+{
+    std::lock_guard lock(mutex_);
+    for (const char ch : result.text)
+        typeChar(fd_, ch);
+    typeChar(fd_, '\n');
+}
+
+void HidSink::onTimeout(std::uint64_t)
+{
 }
 
 JsonSink::JsonSink(bool triggerMode) : triggerMode_(triggerMode) {}
