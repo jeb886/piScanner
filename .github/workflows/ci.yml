@@ -13,21 +13,6 @@ on:
       - 'LICENSE'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libturbojpeg0-dev pkg-config
-      - name: Configure
-        run: cmake -S . -B build -G Ninja
-      - name: Build
-        run: cmake --build build
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
   build-arm64:
     name: build (arm64, Debian Trixie)
     runs-on: ubuntu-24.04-arm
