@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <cctype>
 
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
 #include <turbojpeg.h>
 #endif
 
@@ -123,7 +123,7 @@ std::vector<std::string> expandImagePaths(const std::vector<std::string>& inputs
 
 std::vector<std::uint8_t> encodeJpeg(const GrayImage& image, int quality)
 {
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     tjhandle handle = tjInitCompress();
     if (!handle)
         throw std::runtime_error("failed to initialize libturbojpeg");

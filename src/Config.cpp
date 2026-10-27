@@ -362,7 +362,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         error = "--pixfmt must be yuyv, grey, mjpeg, or auto";
         return std::nullopt;
     }
-#ifndef PISCAN_HAVE_TURBOJPEG
+#ifndef PISCANNER_HAVE_TURBOJPEG
     if (config.pixfmt == "mjpeg") {
         error = "MJPEG requested but this build has no libturbojpeg support";
         return std::nullopt;
@@ -428,11 +428,11 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
 std::string usageText()
 {
     return "Usage:\n"
-           "  piscan devices\n"
-           "  piscan scan [options]\n"
-           "  piscan trigger [options]\n"
-           "  piscan decode <files/dirs> [--expect] [decoder options]\n"
-           "  piscan bench <file.pgm> [--iterations N] [decoder options]\n"
+           "  piscanner devices\n"
+           "  piscanner scan [options]\n"
+           "  piscanner trigger [options]\n"
+           "  piscanner decode <files/dirs> [--expect] [decoder options]\n"
+           "  piscanner bench <file.pgm> [--iterations N] [decoder options]\n"
            "\n"
            "Common options: --device PATH --width N --height N --fps N --pixfmt auto|yuyv|grey|mjpeg\n"
            "  --buffers N --threads N --formats LIST --try-harder --no-rotate --no-downscale\n"

@@ -1,13 +1,13 @@
 [Unit]
-Description=piscan barcode scanner
-After=local-fs.target piscan-gadget.service
+Description=piScanner barcode scanner
+After=local-fs.target piscanner-gadget.service
 
 [Service]
 Type=simple
-User=piscan
-Group=piscan
-EnvironmentFile=-/etc/default/piscan
-ExecStart=/usr/local/bin/piscan $PISCAN_ARGS
+User=piscanner
+Group=piscanner
+EnvironmentFile=-/etc/default/piscanner
+ExecStart=/usr/local/bin/piscanner $PISCANNER_ARGS
 Restart=always
 RestartSec=3
 StandardOutput=journal

@@ -12,6 +12,6 @@ holds generated barcode-free images whose sidecar says `NONE`.
 
 Test commands (from repo root, after `cmake --build build`):
 
-    ./build/piscan decode tests/data/upca tests/data/qr --expect
-    ./build/piscan decode tests/data/hard --expect --try-harder
-    ./build/piscan decode tests/data/negative --expect
+    ./build/piscanner decode tests/data/upca tests/data/qr --expect
+    ./build/piscanner decode tests/data/hard --expect --try-harder
+    ./build/piscanner decode tests/data/negative --expect

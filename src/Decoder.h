@@ -39,7 +39,7 @@ private:
     ZXing::ReaderOptions options_;
     std::optional<RegionOfInterest> roi_;
     std::vector<std::uint8_t> lumaBuffer_;
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     void* turboJpeg_ = nullptr;
 #endif
 };

@@ -95,7 +95,7 @@ void perfDecodeByResolution()
 // full MJPEG-frame decode path (turbojpeg + barcode) at 1080p.
 void perfMjpegPath()
 {
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     const auto image = barcodeFrame("PERF-MJPEG", ZXing::BarcodeFormat::QRCode, 1920, 1080);
     const auto jpeg = encodeJpeg(image, 90);
     std::cout << "PERF mjpeg_input_bytes=" << jpeg.size() << '\n';
@@ -177,7 +177,7 @@ void perfTriggerLatency()
 int main(int argc, char* argv[])
 {
     if (argc != 2) {
-        std::cerr << "usage: piscan_perf_tests <tests/data dir>\n";
+        std::cerr << "usage: piscanner_perf_tests <tests/data dir>\n";
         return 1;
     }
     g_dataDir = argv[1];

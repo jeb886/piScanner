@@ -62,13 +62,22 @@ else
 fi
 BUILD_PATH="$(realpath -m -- "$BUILD_PATH")"
 
-UNIT_PATH=/etc/systemd/system/piscan.service
-DROPIN_DIR=/etc/systemd/system/piscan.service.d
+UNIT_PATH=/etc/systemd/system/piscanner.service
+DROPIN_DIR=/etc/systemd/system/piscanner.service.d
 DROPIN_PATH="$DROPIN_DIR/groups.conf"
-CONFIG_PATH=/etc/default/piscan
-BINARY_PATH=/usr/local/bin/piscan
+CONFIG_PATH=/etc/default/piscanner
+BINARY_PATH=/usr/local/bin/piscanner
 
-UDEV_RULE=/etc/udev/rules.d/99-piscan-hidg.rules
+UDEV_RULE=/etc/udev/rules.d/99-piscanner-hidg.rules
+
+LEGACY_UNIT=/etc/systemd/system/piscan.service
+LEGACY_GADGET_UNIT=/etc/systemd/system/piscan-gadget.service
+LEGACY_DROPIN_DIR=/etc/systemd/system/piscan.service.d
+LEGACY_CONFIG=/etc/default/piscan
+LEGACY_BINARY=/usr/local/bin/piscan
+LEGACY_GADGET_SCRIPT=/usr/local/sbin/piscan-gadget.sh
+LEGACY_MODULES_CONF=/etc/modules-load.d/piscan-gadget.conf
+LEGACY_UDEV_RULE=/etc/udev/rules.d/99-piscan-hidg.rules
 
 config_txt() {
     for path in /boot/firmware/config.txt /boot/config.txt; do
@@ -78,16 +87,40 @@ config_txt() {
 }
 
 if ((UNINSTALL)); then
-    systemctl disable --now piscan.service >/dev/null 2>&1 || true
+    systemctl disable --now piscanner.service >/dev/null 2>&1 || true
     "$REPO_ROOT/scripts/setup-hid-gadget.sh" --uninstall || true
     rm -f -- "$UNIT_PATH" "$BINARY_PATH" "$UDEV_RULE"
     rm -rf -- "$DROPIN_DIR"
     udevadm control --reload-rules 2>/dev/null || true
     systemctl daemon-reload
-    printf '%s\n' 'Removed piscan.service and /usr/local/bin/piscan.'
-    printf 'Kept %s and the piscan system user. Remove them manually if desired: sudo rm -f %s; sudo userdel piscan\n' \
+    printf '%s\n' 'Removed piscanner.service and /usr/local/bin/piscanner.'
+    printf 'Kept %s and the piscanner system user. Remove them manually if desired: sudo rm -f %s; sudo userdel piscanner\n' \
         "$CONFIG_PATH" "$CONFIG_PATH"
     exit 0
+fi
+
+if [[ -e "$LEGACY_UNIT" || -e "$LEGACY_GADGET_UNIT" ]]; then
+    systemctl disable --now piscan.service piscan-gadget.service >/dev/null 2>&1 || true
+fi
+rm -f -- "$LEGACY_UNIT" "$LEGACY_GADGET_UNIT" "$LEGACY_BINARY" "$LEGACY_GADGET_SCRIPT" \
+    "$LEGACY_MODULES_CONF" "$LEGACY_UDEV_RULE"
+rm -rf -- "$LEGACY_DROPIN_DIR"
+systemctl daemon-reload
+udevadm control --reload-rules 2>/dev/null || true
+
+if [[ -e "$LEGACY_CONFIG" && ! -e "$CONFIG_PATH" && ! -L "$CONFIG_PATH" ]]; then
+    mv -- "$LEGACY_CONFIG" "$CONFIG_PATH"
+    sed -i 's/^PISCAN_ARGS=/PISCANNER_ARGS=/' "$CONFIG_PATH"
+    printf 'Migrated the existing configuration from %s to %s.\n' "$LEGACY_CONFIG" "$CONFIG_PATH"
+fi
+
+userdel piscan 2>/dev/null || true
+groupdel piscan 2>/dev/null || true
+
+if [[ -d /sys/kernel/config/usb_gadget/piscan ]]; then
+    # Release the USB controller so the new gadget can bind to it.
+    echo "" >/sys/kernel/config/usb_gadget/piscan/UDC 2>/dev/null || true
+    printf '%s\n' 'The old piscan USB gadget is still present in configfs; reboot to switch to the piscanner gadget.'
 fi
 
 if ((!NO_BUILD)); then
@@ -99,27 +132,27 @@ if ((!NO_BUILD)); then
     fi
 fi
 
-if [[ ! -x "$BUILD_PATH/piscan" ]]; then
-    printf 'error: executable not found: %s/piscan\n' "$BUILD_PATH" >&2
+if [[ ! -x "$BUILD_PATH/piscanner" ]]; then
+    printf 'error: executable not found: %s/piscanner\n' "$BUILD_PATH" >&2
     exit 1
 fi
-install -m 0755 -- "$BUILD_PATH/piscan" "$BINARY_PATH"
+install -m 0755 -- "$BUILD_PATH/piscanner" "$BINARY_PATH"
 
-if ! getent passwd piscan >/dev/null 2>&1; then
-    if getent group piscan >/dev/null 2>&1; then
-        useradd --system --no-create-home --shell /usr/sbin/nologin --gid piscan piscan
+if ! getent passwd piscanner >/dev/null 2>&1; then
+    if getent group piscanner >/dev/null 2>&1; then
+        useradd --system --no-create-home --shell /usr/sbin/nologin --gid piscanner piscanner
     else
-        useradd --system --no-create-home --shell /usr/sbin/nologin piscan
+        useradd --system --no-create-home --shell /usr/sbin/nologin piscanner
     fi
 fi
-if ! getent group piscan >/dev/null 2>&1; then
-    groupadd --system piscan
+if ! getent group piscanner >/dev/null 2>&1; then
+    groupadd --system piscanner
 fi
 
 supplementary_groups=()
 for group in video gpio; do
     if getent group "$group" >/dev/null 2>&1; then
-        usermod -aG "$group" piscan
+        usermod -aG "$group" piscanner
         supplementary_groups+=("$group")
     fi
 done
@@ -128,9 +161,9 @@ if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]]; then
     printf '%s already exists; leaving it unchanged.\n' "$CONFIG_PATH"
 else
     printf '%s\n' \
-        "# Arguments passed to piscan by piscan.service. See \`piscan --help\`." \
+        "# Arguments passed to the piScanner service. See \`piscanner --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 18"' >"$CONFIG_PATH"
+        'PISCANNER_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 18"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
@@ -148,15 +181,15 @@ if ! grep -Eq '^[[:space:]]*dtoverlay=pwm(,|$)' "$CONFIG_TXT" 2>/dev/null; then
     printf 'Added PWM beeper overlay to %s (reboot required).\n' "$CONFIG_TXT"
 fi
 
-# USB HID gadget: lets the piscan system user write /dev/hidg0 and wires
+# USB HID gadget: lets the piscanner system user write /dev/hidg0 and wires
 # the gadget unit in before the scanner starts.
 "$REPO_ROOT/scripts/setup-hid-gadget.sh"
 install -D -m 0644 /dev/stdin "$UDEV_RULE" <<'EOF'
-KERNEL=="hidg*", MODE="0660", GROUP="piscan", TAG+="systemd"
+KERNEL=="hidg*", MODE="0660", GROUP="piscanner", TAG+="systemd"
 EOF
 udevadm control --reload-rules 2>/dev/null || true
 
-install -D -m 0644 -- "$REPO_ROOT/systemd/piscan.service" "$UNIT_PATH"
+install -D -m 0644 -- "$REPO_ROOT/systemd/piscanner.service" "$UNIT_PATH"
 mkdir -p -- "$DROPIN_DIR"
 {
     printf '[Service]\nSupplementaryGroups=\n'
@@ -167,10 +200,10 @@ mkdir -p -- "$DROPIN_DIR"
 chmod 0644 "$DROPIN_PATH"
 
 systemctl daemon-reload
-systemctl enable piscan.service
-if ! systemctl restart piscan.service; then
+systemctl enable piscanner.service
+if ! systemctl restart piscanner.service; then
     printf '%s\n' 'warning: service restart failed; inspect the service status and journal' >&2
 fi
-if ! systemctl status piscan --no-pager; then
-    printf '%s\n' 'The service is not active; check logs with: journalctl -u piscan -f' >&2
+if ! systemctl status piscanner --no-pager; then
+    printf '%s\n' 'The service is not active; check logs with: journalctl -u piscanner -f' >&2
 fi
