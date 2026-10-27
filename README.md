@@ -12,7 +12,18 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 - GPIO is **3.3 V only**. Never connect a 5 V signal. Use an optocoupler for 12/24 V industrial triggers.
 - Add the user to the `video` and `gpio` groups for device access.
 
-![Physical wiring](docs/wiring.png)
+![Physical wiring](docs/wiring.svg)
+
+| Connect | Pi header pin | Signal |
+|---|---|---|
+| Trigger switch, leg 1 | pin 11 | GPIO17 |
+| Trigger switch, leg 2 | pin 9 | GND |
+| Beeper `+` (red) | pin 13 | GPIO27 |
+| Beeper `-` (black) | pin 14 | GND |
+| Logitech Brio | blue USB 3 port | — |
+| Host PC | USB-C port | power + keyboard data |
+
+Pin 1 is the square pad at the end of the header farthest from the USB/Ethernet ports; odd pins are on the inner row and even pins on the board-edge row. Pins 13 and 14 sit side by side, so a 2-pin Dupont connector fits the beeper. Use a 3.3 V active buzzer drawing 15 mA or less; drive a louder 5 V buzzer through an NPN transistor instead of directly.
 
 ## Quick start
 
@@ -77,7 +88,7 @@ piscan bench sample.pgm --iterations 100
 
 Point the Brio at a barcode, press the trigger, and the text appears wherever the cursor is (open Notepad to verify). Non-US-ASCII characters that have no single-key mapping are skipped; the layout is US-QWERTY. Use `--output json` in `/etc/default/piscan` if you'd rather have journal output, and run `piscan --output text` manually for interactive use.
 
-Note: the PC will also supply power over that cable; a Brio plus a running Pi 5 can exceed a port's budget, so powering the Pi through a separate 5 V supply is recommended.
+Note: the Pi 5's USB-C port is also its only power input, so the PC powers the Pi over the same cable. A PC port may not supply enough for a Pi 5 plus a Brio. If the Pi browns out or reboots, use a USB-C power/data splitter fed by a 5 V 5 A supply.
 
 ## Performance
 
