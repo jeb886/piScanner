@@ -86,6 +86,71 @@ config_txt() {
     printf '/boot/firmware/config.txt\n'
 }
 
+config_has_effective_line() {
+    local config=$1 pattern=$2
+    [[ -f "$config" ]] || return 1
+    awk -v pattern="$pattern" '
+        /^[[:space:]]*#/ { next }
+        {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            sub(/[[:space:]]*#.*/, "", line)
+            sub(/[[:space:]]+$/, "", line)
+            if (line ~ /^\[[^]]+\][[:space:]]*$/) {
+                section = line
+                sub(/^\[/, "", section)
+                sub(/\][[:space:]]*$/, "", section)
+                section = tolower(section)
+                next
+            }
+            if ((section == "" || section == "all" || section == "pi5") && line ~ pattern)
+                found = 1
+        }
+        END { exit !found }
+    ' "$config"
+}
+
+append_config_line() {
+    local config=$1 line=$2 last_section
+    if [[ -f "$config" ]]; then
+        last_section=$(awk '
+            /^[[:space:]]*#/ { next }
+            {
+                line = $0
+                sub(/^[[:space:]]*/, "", line)
+                sub(/[[:space:]]*#.*/, "", line)
+                sub(/[[:space:]]+$/, "", line)
+                if (line ~ /^\[[^]]+\][[:space:]]*$/) {
+                    section = line
+                    sub(/^\[/, "", section)
+                    sub(/\][[:space:]]*$/, "", section)
+                    last_section = tolower(section)
+                }
+            }
+            END { print last_section }
+        ' "$config")
+    else
+        last_section=
+    fi
+
+    if [[ -s "$config" ]] && [[ $(tail -c 1 -- "$config" | wc -l) -eq 0 ]]; then
+        printf '\n' >>"$config"
+    fi
+    if [[ -n "$last_section" && "$last_section" != "all" ]]; then
+        printf '[all]\n%s\n' "$line" >>"$config"
+    else
+        printf '%s\n' "$line" >>"$config"
+    fi
+}
+
+ensure_pwm_overlay() {
+    local config=$1
+    if ! config_has_effective_line "$config" '^[[:space:]]*dtoverlay=pwm(,|$)'; then
+        append_config_line "$config" 'dtoverlay=pwm,pin=18,func=2'
+        printf 'Added PWM beeper overlay to %s (reboot required).\n' "$config"
+    fi
+}
+
 if ((UNINSTALL)); then
     systemctl disable --now piscanner.service >/dev/null 2>&1 || true
     "$REPO_ROOT/scripts/setup-hid-gadget.sh" --uninstall || true
@@ -176,10 +241,7 @@ fi
 
 # Hardware PWM overlay for the passive beeper on GPIO18 (header pin 12).
 CONFIG_TXT=$(config_txt)
-if ! grep -Eq '^[[:space:]]*dtoverlay=pwm(,|$)' "$CONFIG_TXT" 2>/dev/null; then
-    printf 'dtoverlay=pwm,pin=18,func=2\n' >>"$CONFIG_TXT"
-    printf 'Added PWM beeper overlay to %s (reboot required).\n' "$CONFIG_TXT"
-fi
+ensure_pwm_overlay "$CONFIG_TXT"
 
 # USB HID gadget: lets the piscanner system user write /dev/hidg0 and wires
 # the gadget unit in before the scanner starts.

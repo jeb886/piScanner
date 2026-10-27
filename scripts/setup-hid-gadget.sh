@@ -29,6 +29,81 @@ config_txt() {
     printf '/boot/firmware/config.txt\n'
 }
 
+config_has_effective_line() {
+    local config=$1 pattern=$2
+    [[ -f "$config" ]] || return 1
+    awk -v pattern="$pattern" '
+        /^[[:space:]]*#/ { next }
+        {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            sub(/[[:space:]]*#.*/, "", line)
+            sub(/[[:space:]]+$/, "", line)
+            if (line ~ /^\[[^]]+\][[:space:]]*$/) {
+                section = line
+                sub(/^\[/, "", section)
+                sub(/\][[:space:]]*$/, "", section)
+                section = tolower(section)
+                next
+            }
+            if ((section == "" || section == "all" || section == "pi5") && line ~ pattern)
+                found = 1
+        }
+        END { exit !found }
+    ' "$config"
+}
+
+append_config_line() {
+    local config=$1 line=$2 last_section
+    if [[ -f "$config" ]]; then
+        last_section=$(awk '
+            /^[[:space:]]*#/ { next }
+            {
+                line = $0
+                sub(/^[[:space:]]*/, "", line)
+                sub(/[[:space:]]*#.*/, "", line)
+                sub(/[[:space:]]+$/, "", line)
+                if (line ~ /^\[[^]]+\][[:space:]]*$/) {
+                    section = line
+                    sub(/^\[/, "", section)
+                    sub(/\][[:space:]]*$/, "", section)
+                    last_section = tolower(section)
+                }
+            }
+            END { print last_section }
+        ' "$config")
+    else
+        last_section=
+    fi
+
+    if [[ -s "$config" ]] && [[ $(tail -c 1 -- "$config" | wc -l) -eq 0 ]]; then
+        printf '\n' >>"$config"
+    fi
+    if [[ -n "$last_section" && "$last_section" != "all" ]]; then
+        printf '[all]\n%s\n' "$line" >>"$config"
+    else
+        printf '%s\n' "$line" >>"$config"
+    fi
+}
+
+ensure_gadget_overlay() {
+    local config=$1
+    if grep -Eq '^[[:space:]]*dtoverlay=dwc3,dr_mode=peripheral[[:space:]]*$' "$config"; then
+        sed -i '/^[[:space:]]*dtoverlay=dwc3,dr_mode=peripheral[[:space:]]*$/d' "$config"
+        printf 'Replaced stale dwc3 peripheral-mode overlay in %s.\n' "$config"
+    fi
+
+    if ! config_has_effective_line "$config" '^[[:space:]]*dtoverlay=dwc2,(.*,)?dr_mode=peripheral([,[:space:]]|$)'; then
+        append_config_line "$config" 'dtoverlay=dwc2,dr_mode=peripheral'
+        printf 'Added dwc2 peripheral-mode overlay to %s (reboot required).\n' "$config"
+    fi
+
+    if config_has_effective_line "$config" '^[[:space:]]*dtoverlay=dwc2,(.*,)?dr_mode=host([,[:space:]]|$)'; then
+        printf 'warning: effective dwc2 host-mode overlay in %s conflicts with gadget peripheral mode; remove it to enable gadget mode.\n' \
+            "$config" >&2
+    fi
+}
+
 if ((UNINSTALL)); then
     systemctl disable --now piscanner-gadget.service >/dev/null 2>&1 || true
     rm -f -- "$GADGET_UNIT" "$GADGET_SCRIPT" "$MODULES_CONF"
@@ -37,13 +112,9 @@ if ((UNINSTALL)); then
     exit 0
 fi
 
-# --- device-tree overlay: run the USB-C port in peripheral (gadget) mode ---
+# --- device-tree overlay: use DWC2 peripheral mode for the USB-C port ---
 CONFIG=$(config_txt)
-if ! grep -Eq '^[[:space:]]*dtoverlay=dwc3(,|$)' "$CONFIG" 2>/dev/null &&
-   ! grep -Eq '^[[:space:]]*dtoverlay=dwc2' "$CONFIG" 2>/dev/null; then
-    printf 'dtoverlay=dwc3,dr_mode=peripheral\n' >>"$CONFIG"
-    printf 'Added dwc3 peripheral-mode overlay to %s (reboot required).\n' "$CONFIG"
-fi
+ensure_gadget_overlay "$CONFIG"
 
 # --- module autoload ---
 printf 'libcomposite\n' >"$MODULES_CONF"

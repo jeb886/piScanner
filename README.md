@@ -85,7 +85,7 @@ piscanner bench sample.pgm --iterations 100
 
 `install-service.sh` also configures the Pi's USB-C port as a USB gadget, so the Pi enumerates as a standard USB keyboard on whatever PC it is plugged into (no drivers needed on Windows, macOS, or Linux). Pressing the GPIO trigger scans a barcode and piScanner types the decoded text plus Enter, like a commercial scanner wedge. The install:
 
-- adds `dtoverlay=dwc3,dr_mode=peripheral` to `config.txt` (one reboot needed on first install),
+- adds `dtoverlay=dwc2,dr_mode=peripheral` to the `[all]` section of `config.txt` (one reboot needed on first install),
 - adds `dtoverlay=pwm,pin=18,func=2` to `config.txt` for the passive beeper (reboot required),
 - loads `libcomposite` and runs `piscanner-gadget.service` at boot, which creates a keyboard gadget on `/dev/hidg0` via configfs,
 - installs a udev rule so the unprivileged `piscanner` service user can write it,
