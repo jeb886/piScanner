@@ -2,7 +2,7 @@
 #include "Config.h"
 #include "DecodeFiles.h"
 #include "FileFrameSource.h"
-#include "GpioBeeper.h"
+#include "PwmBeeper.h"
 #include "GpioTrigger.h"
 #include "Output.h"
 #include "Scanner.h"
@@ -77,10 +77,13 @@ int main(int argc, char* argv[])
             sink = std::make_unique<HidSink>(config.hidDevice);
         else
             sink = std::make_unique<TextSink>();
-        std::unique_ptr<GpioBeeper> beeper;
+        std::unique_ptr<PwmBeeper> beeper;
+        std::unique_ptr<ResultSink> innerSink;
         if (config.beeperLine >= 0) {
-            beeper = std::make_unique<GpioBeeper>(config);
-            sink = std::make_unique<BeepSink>(*sink, *beeper);
+            beeper = std::make_unique<PwmBeeper>(config);
+            innerSink = std::move(sink);
+            sink = std::make_unique<BeepSink>(*innerSink, *beeper);
+            beeper->startup();
         }
         std::signal(SIGINT, requestShutdownSignal);
         std::signal(SIGTERM, requestShutdownSignal);

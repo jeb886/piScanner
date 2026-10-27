@@ -4,8 +4,8 @@
 <text x="700" y="76" font-size="16" text-anchor="middle" fill="#555">40-pin header: pin 1 is the square pad at the end farthest from the USB/Ethernet ports. Odd pins = inner row, even pins = board-edge row.</text>
 <path d="M370,222 V300 h-110 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M430,222 V320 h-110 V400" fill="none" stroke="#1f6fd1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M490,222 V320 h130 V400" fill="none" stroke="#c62828" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M490,170 H520.0 V300 h130 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M430,170 H460.0 V320 H620 V400" fill="none" stroke="#c62828" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M490,170 H520.0 V300 H650 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="96" y="140" width="1208" height="112" rx="8" fill="#1b1b1b"/>
 <text x="90" y="175" font-size="12" text-anchor="end" fill="#555">edge</text>
 <text x="90" y="227" font-size="12" text-anchor="end" fill="#555">inner</text>
@@ -56,14 +56,14 @@
 <rect x="404.5" y="256" width="51.0" height="19" fill="#fff"/>
 <text x="430" y="270" font-size="12" text-anchor="middle" fill="#1f6fd1" font-weight="bold">GPIO17</text>
 <circle cx="430" cy="170" r="17" fill="#5d8a5d"/>
+<circle cx="430" cy="170" r="22" fill="none" stroke="#c62828" stroke-width="4"/>
 <text x="430" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">12</text>
 <rect x="404.5" y="114" width="51.0" height="19" fill="#fff"/>
-<text x="430" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO18</text>
+<text x="430" y="128" font-size="12" text-anchor="middle" fill="#c62828" font-weight="bold">GPIO18</text>
 <circle cx="490" cy="222" r="17" fill="#5d8a5d"/>
-<circle cx="490" cy="222" r="22" fill="none" stroke="#c62828" stroke-width="4"/>
 <text x="490" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">13</text>
 <rect x="464.5" y="256" width="51.0" height="19" fill="#fff"/>
-<text x="490" y="270" font-size="12" text-anchor="middle" fill="#c62828" font-weight="bold">GPIO27</text>
+<text x="490" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO27</text>
 <circle cx="490" cy="170" r="17" fill="#444"/>
 <circle cx="490" cy="170" r="22" fill="none" stroke="#ffd600" stroke-width="4"/>
 <text x="490" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">14</text>
@@ -183,12 +183,12 @@
 <text x="290.0" y="510" font-size="17" font-weight="bold" text-anchor="middle" fill="#1f6fd1">Trigger switch</text>
 <text x="290.0" y="532" font-size="14" text-anchor="middle">momentary, normally open</text>
 <text x="290.0" y="552" font-size="14" text-anchor="middle">pin 11 (GPIO17) ↔ pin 9 (GND)</text>
-<circle cx="635.0" cy="445" r="45" fill="#222"/><circle cx="635.0" cy="445" r="8" fill="#555"/>
+<circle cx="635" cy="445" r="45" fill="#222"/><circle cx="635" cy="445" r="8" fill="#555"/>
 <text x="608" y="396" font-size="18" font-weight="bold" fill="#c62828" text-anchor="end">+</text>
-<text x="662.0" y="396" font-size="18" font-weight="bold">−</text>
-<text x="635.0" y="515" font-size="17" font-weight="bold" text-anchor="middle" fill="#c62828">Beeper</text>
-<text x="635.0" y="537" font-size="14" text-anchor="middle">2-wire active buzzer, 3.3 V</text>
-<text x="635.0" y="557" font-size="14" text-anchor="middle">+ → pin 13 (GPIO27), − → pin 14 (GND)</text>
+<text x="662" y="396" font-size="18" font-weight="bold">−</text>
+<text x="635" y="515" font-size="17" font-weight="bold" text-anchor="middle" fill="#c62828">Beeper</text>
+<text x="635" y="537" font-size="14" text-anchor="middle">2-wire PASSIVE buzzer (hardware PWM tones)</text>
+<text x="635" y="557" font-size="14" text-anchor="middle">+ → pin 12 (GPIO18), − → pin 14 (GND)</text>
 <text x="150" y="615" font-size="18" font-weight="bold">USB connections</text>
 <rect x="150" y="635" width="420" height="280" rx="16" fill="#2e7d32"/>
 <rect x="175" y="645" width="330" height="26" fill="#1b1b1b"/><text x="340" y="663" font-size="13" text-anchor="middle" fill="#fff">40-pin header (pin 1 ← this end)</text>
@@ -209,9 +209,9 @@
 <text x="1040" y="680" font-size="14" fill="#c62828" font-weight="bold">GPIO pins are 3.3 V only.</text>
 <text x="1040" y="700" font-size="14" fill="#222" font-weight="normal">Never connect 5 V to a GPIO pin.</text>
 <text x="1040" y="720" font-size="14" fill="#222" font-weight="normal"></text>
-<text x="1040" y="740" font-size="14" fill="#222" font-weight="normal">Beeper must draw ≤ 15 mA. For a louder</text>
-<text x="1040" y="760" font-size="14" fill="#222" font-weight="normal">5 V buzzer, switch it with an NPN</text>
-<text x="1040" y="780" font-size="14" fill="#222" font-weight="normal">transistor instead of driving it directly.</text>
+<text x="1040" y="740" font-size="14" fill="#222" font-weight="normal">Beeper: small piezo connects directly;</text>
+<text x="1040" y="760" font-size="14" fill="#222" font-weight="normal">a magnetic (coil) buzzer needs an NPN</text>
+<text x="1040" y="780" font-size="14" fill="#222" font-weight="normal">transistor. Installer enables PWM on GPIO18.</text>
 <text x="1040" y="800" font-size="14" fill="#222" font-weight="normal"></text>
 <text x="1040" y="820" font-size="14" fill="#222" font-weight="normal">Trigger uses the Pi's internal pull-up;</text>
 <text x="1040" y="840" font-size="14" fill="#222" font-weight="normal">pressing shorts GPIO17 to GND.</text>

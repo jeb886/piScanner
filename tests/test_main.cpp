@@ -208,6 +208,16 @@ void testArguments()
     CHECK(!parse({"piscan", "scan", "--threads", "3", "--buffers", "4"}, error).has_value());
     CHECK(!parse({"piscan", "scan", "--roi", "0.8,0,0.5,1"}, error).has_value());
     CHECK(!parse({"piscan", "scan", "--pixfmt", "bad"}, error).has_value());
+    CHECK(!parse({"piscan", "scan", "--beeper-line", "27"}, error).has_value());
+    auto pwm = parse({"piscan", "scan", "--beeper-line", "18", "--beeper-pwmchip", "/sys/class/pwm/pwmchip7",
+                      "--beeper-pwm-channel", "2"},
+                     error);
+    CHECK(pwm.has_value());
+    if (pwm) {
+        CHECK(pwm->beeperLine == 18);
+        CHECK(pwm->beeperPwmChip == "/sys/class/pwm/pwmchip7");
+        CHECK(pwm->beeperPwmChannel == 2);
+    }
     auto hid = parse({"piscan", "scan", "--output", "hid", "--hid-device", "/dev/hidg3"}, error);
     CHECK(hid.has_value());
     if (hid) {

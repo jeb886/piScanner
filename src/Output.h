@@ -51,18 +51,18 @@ private:
     std::mutex mutex_;
 };
 
-class GpioBeeper;
+class PwmBeeper;
 
-// Decorates another sink: forwards the result and pulses the beeper.
+// Decorates another sink: forwards the result and plays a decode beep.
 class BeepSink final : public ResultSink {
 public:
-    BeepSink(ResultSink& inner, GpioBeeper& beeper) : inner_(inner), beeper_(beeper) {}
+    BeepSink(ResultSink& inner, PwmBeeper& beeper) : inner_(inner), beeper_(beeper) {}
     void onResult(const ScanResult& result) override;
     void onTimeout(std::uint64_t timestampUs) override;
 
 private:
     ResultSink& inner_;
-    GpioBeeper& beeper_;
+    PwmBeeper& beeper_;
 };
 
 std::string jsonEscape(const std::string& input);
