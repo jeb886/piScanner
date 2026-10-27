@@ -79,6 +79,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_HID_DEVICE,
         OPT_BEEPER_LINE,
         OPT_BEEPER_MS,
+        OPT_BEEPER_PWMCHIP,
+        OPT_BEEPER_PWMCHANNEL,
         OPT_STATS,
         OPT_TRIGGER,
         OPT_GPIO_CHIP,
@@ -118,6 +120,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"hid-device", required_argument, nullptr, OPT_HID_DEVICE},
         {"beeper-line", required_argument, nullptr, OPT_BEEPER_LINE},
         {"beeper-ms", required_argument, nullptr, OPT_BEEPER_MS},
+        {"beeper-pwmchip", required_argument, nullptr, OPT_BEEPER_PWMCHIP},
+        {"beeper-pwm-channel", required_argument, nullptr, OPT_BEEPER_PWMCHANNEL},
         {"stats", no_argument, nullptr, OPT_STATS},
         {"verbose", no_argument, nullptr, 'v'},
         {"gpio-trigger", required_argument, nullptr, OPT_TRIGGER},
@@ -230,6 +234,13 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
             break;
         case OPT_BEEPER_MS:
             if (!assignInt("beeper-ms", config.beeperMs))
+                return std::nullopt;
+            break;
+        case OPT_BEEPER_PWMCHIP:
+            config.beeperPwmChip = optarg;
+            break;
+        case OPT_BEEPER_PWMCHANNEL:
+            if (!assignInt("beeper-pwm-channel", config.beeperPwmChannel))
                 return std::nullopt;
             break;
         case OPT_STATS:
@@ -361,6 +372,15 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         error = "--beeper-ms must be > 0";
         return std::nullopt;
     }
+    if (config.beeperLine >= 0 && config.beeperLine != 12 && config.beeperLine != 13 && config.beeperLine != 18 &&
+        config.beeperLine != 19) {
+        error = "--beeper-line must be a hardware-PWM GPIO (12, 13, 18 or 19); the default is 18 (header pin 12)";
+        return std::nullopt;
+    }
+    if (config.beeperPwmChannel < -1 || config.beeperPwmChannel > 3) {
+        error = "--beeper-pwm-channel must be -1 or a PWM channel from 0 to 3";
+        return std::nullopt;
+    }
     if (config.output != "text" && config.output != "json" && config.output != "hid") {
         error = "--output must be text, json, or hid";
         return std::nullopt;
@@ -417,7 +437,8 @@ std::string usageText()
            "Common options: --device PATH --width N --height N --fps N --pixfmt auto|yuyv|grey|mjpeg\n"
            "  --buffers N --threads N --formats LIST --try-harder --no-rotate --no-downscale\n"
            "  --max-symbols N --binarizer local|global|bool|fixed --roi x,y,w,h\n"
-           "  --output text|json|hid --hid-device PATH --beeper-line N --beeper-ms N --stats --exposure N --focus N --gain N -v --help --version\n"
+           "  --output text|json|hid --hid-device PATH --beeper-line N --beeper-ms N --beeper-pwmchip PATH --beeper-pwm-channel N\n"
+           "  --stats --exposure N --focus N --gain N -v --help --version\n"
            "Trigger options: --trigger gpio|stdin --gpio-chip PATH --gpio-line N --gpio-bias pull-up|pull-down|disable\n"
            "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
            "File source (scan/trigger, replaces the camera): --source IMG_OR_DIR (repeatable)\n"

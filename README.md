@@ -8,7 +8,7 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 
 - Raspberry Pi 5 and a UVC-compatible USB webcam (tested target: Logitech Brio, USB 3).
 - For the default trigger, connect a momentary switch between BCM GPIO17 (header pin 11) and GND (pin 9). The internal pull-up is enabled by default.
-- For the beeper, connect a 2-wire active buzzer between GPIO27 (pin 13, `+`) and GND (pin 14, `-`). Enable it with `--beeper-line 27` (set `--beeper-ms` for tone length).
+- For the beeper, connect a **passive** buzzer with `+` on BCM GPIO18 (header pin 12) and `-` on GND (pin 14). A small piezo can connect directly; drive a magnetic/coil buzzer through an NPN transistor.
 - GPIO is **3.3 V only**. Never connect a 5 V signal. Use an optocoupler for 12/24 V industrial triggers.
 - Add the user to the `video` and `gpio` groups for device access.
 
@@ -18,12 +18,14 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 |---|---|---|
 | Trigger switch, leg 1 | pin 11 | GPIO17 |
 | Trigger switch, leg 2 | pin 9 | GND |
-| Beeper `+` (red) | pin 13 | GPIO27 |
+| Beeper `+` (red) | pin 12 | GPIO18 |
 | Beeper `-` (black) | pin 14 | GND |
 | Logitech Brio | blue USB 3 port | — |
 | Host PC | USB-C port | power + keyboard data |
 
-Pin 1 is the square pad at the end of the header farthest from the USB/Ethernet ports; odd pins are on the inner row and even pins on the board-edge row. Pins 13 and 14 sit side by side, so a 2-pin Dupont connector fits the beeper. Use a 3.3 V active buzzer drawing 15 mA or less; drive a louder 5 V buzzer through an NPN transistor instead of directly.
+Pin 1 is the square pad at the end of the header farthest from the USB/Ethernet ports; odd pins are on the inner row and even pins on the board-edge row. Pins 12 and 14 are adjacent on the board-edge row, so a 2-pin Dupont connector fits the beeper. Use a small piezo directly; a magnetic/coil passive buzzer needs an NPN transistor.
+
+The passive beeper plays a startup chirp at 2471 Hz (low), 2752 Hz (medium), and 3056 Hz (high), each for `--beeper-ms` milliseconds. Each successful decode plays one medium beep; another decode while it is sounding extends that beep. The installer enables the PWM overlay for GPIO18 and prints a reboot-required notice.
 
 ## Quick start
 
@@ -73,7 +75,7 @@ piscan decode tests/data/qr --expect
 piscan bench sample.pgm --iterations 100
 ```
 
-`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. With `--beeper-line N` a short beep follows every decoded result (the service default is GPIO27, 80 ms). Diagnostics and optional statistics go to stderr.
+`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. With `--beeper-line N` a short medium beep follows every decoded result (the service default is GPIO18, 80 ms). `--beeper-line` accepts hardware-PWM GPIOs 12, 13, 18, or 19; use `--beeper-pwmchip PATH` and `--beeper-pwm-channel N` to override auto-detection. Diagnostics and optional statistics go to stderr.
 
 `decode` prints each file's result; with `--expect` it compares against `<name>.txt` sidecars (`NONE` = no barcode expected) and exits non-zero on any mismatch. `scan`/`trigger` accept `--source IMG_OR_DIR` (repeatable) instead of `--device` to replay image files through the full pipeline at `--fps`, looping `--repeat N` times (0 = forever) — a mock camera for test automation.
 
@@ -82,6 +84,7 @@ piscan bench sample.pgm --iterations 100
 `install-service.sh` also configures the Pi's USB-C port as a USB gadget, so the Pi enumerates as a standard USB keyboard on whatever PC it is plugged into (no drivers needed on Windows, macOS, or Linux). Pressing the GPIO trigger scans a barcode and piscan types the decoded text plus Enter, like a commercial scanner wedge. The install:
 
 - adds `dtoverlay=dwc3,dr_mode=peripheral` to `config.txt` (one reboot needed on first install),
+- adds `dtoverlay=pwm,pin=18,func=2` to `config.txt` for the passive beeper (reboot required),
 - loads `libcomposite` and runs `piscan-gadget.service` at boot, which creates a keyboard gadget on `/dev/hidg0` via configfs,
 - installs a udev rule so the unprivileged `piscan` service user can write it,
 - defaults the service to `trigger --trigger gpio --output hid`.

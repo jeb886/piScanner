@@ -70,6 +70,13 @@ BINARY_PATH=/usr/local/bin/piscan
 
 UDEV_RULE=/etc/udev/rules.d/99-piscan-hidg.rules
 
+config_txt() {
+    for path in /boot/firmware/config.txt /boot/config.txt; do
+        [[ -f "$path" ]] && { printf '%s\n' "$path"; return; }
+    done
+    printf '/boot/firmware/config.txt\n'
+}
+
 if ((UNINSTALL)); then
     systemctl disable --now piscan.service >/dev/null 2>&1 || true
     "$REPO_ROOT/scripts/setup-hid-gadget.sh" --uninstall || true
@@ -123,9 +130,22 @@ else
     printf '%s\n' \
         "# Arguments passed to piscan by piscan.service. See \`piscan --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 27"' >"$CONFIG_PATH"
+        'PISCAN_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 18"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
+fi
+
+if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
+   grep -Eq -- '--beeper-line[[:space:]]+27([[:space:]]|$)' "$CONFIG_PATH"; then
+    sed -i -E 's/--beeper-line[[:space:]]+27/--beeper-line 18/g' "$CONFIG_PATH"
+    printf 'Updated %s from GPIO27 to GPIO18 for the PWM beeper.\n' "$CONFIG_PATH"
+fi
+
+# Hardware PWM overlay for the passive beeper on GPIO18 (header pin 12).
+CONFIG_TXT=$(config_txt)
+if ! grep -Eq '^[[:space:]]*dtoverlay=pwm(,|$)' "$CONFIG_TXT" 2>/dev/null; then
+    printf 'dtoverlay=pwm,pin=18,func=2\n' >>"$CONFIG_TXT"
+    printf 'Added PWM beeper overlay to %s (reboot required).\n' "$CONFIG_TXT"
 fi
 
 # USB HID gadget: lets the piscan system user write /dev/hidg0 and wires

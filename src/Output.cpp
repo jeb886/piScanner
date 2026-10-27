@@ -1,6 +1,6 @@
 #include "Output.h"
 
-#include "GpioBeeper.h"
+#include "PwmBeeper.h"
 #include "HidKeys.h"
 
 #include <chrono>
