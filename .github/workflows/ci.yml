@@ -27,3 +27,18 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  build-arm64:
+    name: build (arm64, Debian Trixie)
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build g++ libturbojpeg0-dev pkg-config git ca-certificates
+      - name: Configure
+        run: cmake -S . -B build -G Ninja
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
