@@ -50,7 +50,7 @@ Edit `/etc/default/piscanner` to change the service arguments, then restart it w
 1. Flash the SD card with Raspberry Pi Imager; set the user, Wi-Fi and enable SSH in the Imager customization.
 2. `sudo apt update && sudo apt install -y git`
 3. Clone the repo (it's private — authenticate with `gh auth login` or an HTTPS personal access token):
-   `git clone https://github.com/jeb886/pi-project.git && cd pi-project`
+   `git clone https://github.com/jeb886/piScanner.git && cd piScanner`
 4. `./scripts/build.sh` then `sudo ./scripts/install-service.sh`
 
 ## Build

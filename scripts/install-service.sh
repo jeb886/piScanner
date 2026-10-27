@@ -118,6 +118,8 @@ userdel piscan 2>/dev/null || true
 groupdel piscan 2>/dev/null || true
 
 if [[ -d /sys/kernel/config/usb_gadget/piscan ]]; then
+    # Release the USB controller so the new gadget can bind to it.
+    echo "" >/sys/kernel/config/usb_gadget/piscan/UDC 2>/dev/null || true
     printf '%s\n' 'The old piscan USB gadget is still present in configfs; reboot to switch to the piscanner gadget.'
 fi
 
