@@ -8,7 +8,7 @@
 #include <chrono>
 #include <stdexcept>
 
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
 #include <turbojpeg.h>
 #endif
 
@@ -31,7 +31,7 @@ Decoder::Decoder(const Config& config) : roi_(config.roi)
     else
         throw std::invalid_argument("unknown binarizer: " + config.binarizer);
 
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     turboJpeg_ = tjInitDecompress();
     if (turboJpeg_ == nullptr)
         throw std::runtime_error("failed to initialize libturbojpeg");
@@ -40,7 +40,7 @@ Decoder::Decoder(const Config& config) : roi_(config.roi)
 
 Decoder::~Decoder()
 {
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     if (turboJpeg_ != nullptr)
         tjDestroy(static_cast<tjhandle>(turboJpeg_));
 #endif
@@ -63,7 +63,7 @@ ZXing::ImageView Decoder::toLuma(const Frame& frame)
             throw std::invalid_argument("GREY frame is smaller than its dimensions");
         return {frame.data, frame.width, frame.height, ZXing::ImageFormat::Lum, frame.stride, 1};
     }
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     if (frame.fmt == PixelFormat::MJPEG) {
         if (frame.bytes == 0)
             throw std::invalid_argument("MJPEG frame is empty");

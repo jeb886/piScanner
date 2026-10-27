@@ -65,7 +65,7 @@ GpioTrigger::GpioTrigger(const Config& config) : activeLow_(config.activeLow)
     request.offsets[0] = static_cast<std::uint32_t>(config.gpioLine);
     request.num_lines = 1;
     request.event_buffer_size = 16;
-    std::strncpy(request.consumer, "piscan-trigger", sizeof(request.consumer) - 1);
+    std::strncpy(request.consumer, "piscanner-trigger", sizeof(request.consumer) - 1);
     request.config.flags = GPIO_V2_LINE_FLAG_INPUT | GPIO_V2_LINE_FLAG_EDGE_RISING | GPIO_V2_LINE_FLAG_EDGE_FALLING;
     if (config.gpioBias == "pull-up")
         request.config.flags |= GPIO_V2_LINE_FLAG_BIAS_PULL_UP;

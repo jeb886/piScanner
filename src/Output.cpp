@@ -96,7 +96,7 @@ void typeChar(int fd, char ch)
 HidSink::HidSink(const std::string& device)
 {
     // /dev/hidg0 appears only after the gadget service enumerates it; the
-    // piscan unit can race it on boot, so wait a while before failing.
+    // piScanner unit can race it on boot, so wait a while before failing.
     for (int attempt = 0; attempt < 60; ++attempt) {
         fd_ = open(device.c_str(), O_WRONLY | O_CLOEXEC);
         if (fd_ >= 0)

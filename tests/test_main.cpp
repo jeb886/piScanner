@@ -30,7 +30,7 @@
 #include <tuple>
 #include <vector>
 
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
 #include <turbojpeg.h>
 #endif
 
@@ -151,7 +151,7 @@ void testRoiAndFormats()
 
 void testMjpeg()
 {
-#ifdef PISCAN_HAVE_TURBOJPEG
+#ifdef PISCANNER_HAVE_TURBOJPEG
     const auto image = barcodeFrame("JPEG QR", ZXing::BarcodeFormat::QRCode);
     tjhandle compressor = tjInitCompress();
     CHECK(compressor != nullptr);
@@ -186,7 +186,7 @@ void testDedupe()
 void testArguments()
 {
     std::string error;
-    auto defaults = parse({"piscan", "scan"}, error);
+    auto defaults = parse({"piscanner", "scan"}, error);
     CHECK(defaults.has_value());
     if (defaults) {
         CHECK(defaults->threads == 2);
@@ -195,7 +195,7 @@ void testArguments()
         CHECK(!defaults->tryHarder);
         CHECK(defaults->tryRotate);
     }
-    auto options = parse({"piscan", "scan", "--threads", "3", "--buffers", "5", "--roi", "0.1,0.2,0.5,0.6",
+    auto options = parse({"piscanner", "scan", "--threads", "3", "--buffers", "5", "--roi", "0.1,0.2,0.5,0.6",
                           "--try-harder", "--no-rotate"},
                          error);
     CHECK(options.has_value());
@@ -205,11 +205,11 @@ void testArguments()
         CHECK(options->tryHarder);
         CHECK(!options->tryRotate);
     }
-    CHECK(!parse({"piscan", "scan", "--threads", "3", "--buffers", "4"}, error).has_value());
-    CHECK(!parse({"piscan", "scan", "--roi", "0.8,0,0.5,1"}, error).has_value());
-    CHECK(!parse({"piscan", "scan", "--pixfmt", "bad"}, error).has_value());
-    CHECK(!parse({"piscan", "scan", "--beeper-line", "27"}, error).has_value());
-    auto pwm = parse({"piscan", "scan", "--beeper-line", "18", "--beeper-pwmchip", "/sys/class/pwm/pwmchip7",
+    CHECK(!parse({"piscanner", "scan", "--threads", "3", "--buffers", "4"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--roi", "0.8,0,0.5,1"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--pixfmt", "bad"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--beeper-line", "27"}, error).has_value());
+    auto pwm = parse({"piscanner", "scan", "--beeper-line", "18", "--beeper-pwmchip", "/sys/class/pwm/pwmchip7",
                       "--beeper-pwm-channel", "2"},
                      error);
     CHECK(pwm.has_value());
@@ -218,13 +218,13 @@ void testArguments()
         CHECK(pwm->beeperPwmChip == "/sys/class/pwm/pwmchip7");
         CHECK(pwm->beeperPwmChannel == 2);
     }
-    auto hid = parse({"piscan", "scan", "--output", "hid", "--hid-device", "/dev/hidg3"}, error);
+    auto hid = parse({"piscanner", "scan", "--output", "hid", "--hid-device", "/dev/hidg3"}, error);
     CHECK(hid.has_value());
     if (hid) {
         CHECK(hid->output == "hid");
         CHECK(hid->hidDevice == "/dev/hidg3");
     }
-    CHECK(!parse({"piscan", "scan", "--output", "bogus"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--output", "bogus"}, error).has_value());
 }
 
 // Every character of a representative barcode charset must map to a keycode,

@@ -192,7 +192,7 @@ V4l2Camera::V4l2Camera(const Config& config)
             supported.push_back(description.pixelformat);
         }
 
-#ifndef PISCAN_HAVE_TURBOJPEG
+#ifndef PISCANNER_HAVE_TURBOJPEG
         supported.erase(std::remove(supported.begin(), supported.end(), V4L2_PIX_FMT_MJPEG), supported.end());
 #endif
         const auto width = static_cast<std::uint32_t>(config.width);

@@ -16,9 +16,9 @@ fi
 UNINSTALL=0
 [[ "${1:-}" == "--uninstall" ]] && UNINSTALL=1
 
-GADGET_SCRIPT=/usr/local/sbin/piscan-gadget.sh
-GADGET_UNIT=/etc/systemd/system/piscan-gadget.service
-MODULES_CONF=/etc/modules-load.d/piscan-gadget.conf
+GADGET_SCRIPT=/usr/local/sbin/piscanner-gadget.sh
+GADGET_UNIT=/etc/systemd/system/piscanner-gadget.service
+MODULES_CONF=/etc/modules-load.d/piscanner-gadget.conf
 
 # Pi OS mounts firmware config at /boot/firmware since Bookworm; fall back
 # to /boot for older layouts.
@@ -30,7 +30,7 @@ config_txt() {
 }
 
 if ((UNINSTALL)); then
-    systemctl disable --now piscan-gadget.service >/dev/null 2>&1 || true
+    systemctl disable --now piscanner-gadget.service >/dev/null 2>&1 || true
     rm -f -- "$GADGET_UNIT" "$GADGET_SCRIPT" "$MODULES_CONF"
     systemctl daemon-reload
     printf '%s\n' 'Removed the HID gadget service. The dtoverlay line in config.txt was kept; remove it manually if desired.'
@@ -55,7 +55,7 @@ install -m 0755 -D /dev/stdin "$GADGET_SCRIPT" <<'GADGET'
 # Creates a USB HID keyboard gadget via configfs (libcomposite).
 set -euo pipefail
 
-GADGET=/sys/kernel/config/usb_gadget/piscan
+GADGET=/sys/kernel/config/usb_gadget/piscanner
 
 mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
 if [[ -d "$GADGET" ]]; then
@@ -72,8 +72,8 @@ echo 0x0100 >bcdDevice
 echo 0x0200 >bcdUSB
 
 mkdir -p strings/0x409
-echo "piscan" >strings/0x409/manufacturer
-echo "piscan barcode scanner" >strings/0x409/product
+echo "piScanner" >strings/0x409/manufacturer
+echo "piScanner barcode scanner" >strings/0x409/product
 echo "0001" >strings/0x409/serialnumber
 
 mkdir -p configs/c.1/strings/0x409
@@ -96,15 +96,15 @@ GADGET
 
 install -m 0644 -D /dev/stdin "$GADGET_UNIT" <<'UNIT'
 [Unit]
-Description=piscan USB HID keyboard gadget
+Description=piScanner USB HID keyboard gadget
 After=systemd-modules-load.service
 RequiresMountsFor=/sys/kernel/config
 DefaultDependencies=no
-Before=basic.target piscan.service
+Before=basic.target piscanner.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/piscan-gadget.sh
+ExecStart=/usr/local/sbin/piscanner-gadget.sh
 RemainAfterExit=yes
 
 [Install]
@@ -112,8 +112,8 @@ WantedBy=basic.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable piscan-gadget.service
-systemctl start piscan-gadget.service 2>/dev/null \
+systemctl enable piscanner-gadget.service
+systemctl start piscanner-gadget.service 2>/dev/null \
     || printf '%s\n' 'note: gadget could not start now (overlay needs a reboot); it will start on boot.'
 
 printf '%s\n' 'HID gadget setup complete.'

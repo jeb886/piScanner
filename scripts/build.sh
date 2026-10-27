@@ -89,11 +89,11 @@ fi
 cmake_args=(-S . -B "$BUILD_PATH" -DCMAKE_BUILD_TYPE=Release)
 case "$(uname -m)" in
 aarch64 | arm64)
-    cmake_args+=(-DPISCAN_NATIVE=ON)
+    cmake_args+=(-DPISCANNER_NATIVE=ON)
     ;;
 esac
 if ((SKIP_TESTS)); then
-    cmake_args+=(-DPISCAN_BUILD_TESTS=OFF)
+    cmake_args+=(-DPISCANNER_BUILD_TESTS=OFF)
 fi
 
 cmake "${cmake_args[@]}"
@@ -130,6 +130,6 @@ if ((group_changed)); then
     printf '%s\n' 'A re-login is needed for the new group membership to take effect.'
 fi
 
-printf '\nBuild complete: %s/piscan\n' "$BUILD_PATH"
-printf 'Next steps:\n  %s/piscan devices\n  %s/piscan scan --stats\n  %s/scripts/install-service.sh\n' \
+printf '\nBuild complete: %s/piscanner\n' "$BUILD_PATH"
+printf 'Next steps:\n  %s/piscanner devices\n  %s/piscanner scan --stats\n  %s/scripts/install-service.sh\n' \
     "$BUILD_PATH" "$BUILD_PATH" "$REPO_ROOT"

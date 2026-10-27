@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
         return 0;
     }
     if (config.command == "version") {
-        std::cout << "piscan " << PISCAN_VERSION << '\n';
+        std::cout << "piscanner " << PISCANNER_VERSION << '\n';
         return 0;
     }
     if (config.command == "devices") {
