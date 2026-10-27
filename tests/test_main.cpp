@@ -225,6 +225,10 @@ void testArguments()
         CHECK(hid->hidDevice == "/dev/hidg3");
     }
     CHECK(!parse({"piscanner", "scan", "--output", "bogus"}, error).has_value());
+    auto logged = parse({"piscanner", "scan", "--log-file", "/tmp/piscanner-test.log"}, error);
+    CHECK(logged.has_value());
+    if (logged)
+        CHECK(logged->logFile == "/tmp/piscanner-test.log");
 }
 
 // Every character of a representative barcode charset must map to a keycode,
@@ -506,6 +510,24 @@ void testDecodeCli(const char* executable)
     CHECK(std::system(fail.c_str()) == 256); // exit code 1
 }
 
+// --log-file: a file-source scan must produce a log with the startup line,
+// per-decode entries carrying symbology + decode ms, and a stop line.
+void testFileLogging(const char* executable)
+{
+    const auto logPath = (std::filesystem::temp_directory_path() / "piscanner-test.log").string();
+    std::filesystem::remove(logPath);
+    const std::string command = std::string("\"") + executable + "\" scan --source \"" + g_dataDir +
+                                "/qr\" --repeat 1 --log-file \"" + logPath + "\" > /dev/null 2>&1";
+    CHECK(std::system(command.c_str()) == 0);
+    std::ifstream in(logPath);
+    const std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    CHECK(text.find("start scan") != std::string::npos);
+    CHECK(text.find("decode QR") != std::string::npos);
+    CHECK(text.find("ms \"") != std::string::npos);
+    CHECK(text.find("stop") != std::string::npos);
+    std::filesystem::remove(logPath);
+}
+
 }
 
 // Pixel-format negotiation: auto prefers uncompressed formats but falls
@@ -567,6 +589,7 @@ int main(int argc, char* argv[])
         testScannerWithFileSource();
         testTriggerWithFileSource();
         testDecodeCli(argv[1]);
+        testFileLogging(argv[1]);
         testBench(argv[1], argv[2]);
     } else {
         CHECK(false);

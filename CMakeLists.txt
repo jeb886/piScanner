@@ -56,6 +56,7 @@ set(PISCANNER_CORE_SOURCES
     src/PwmBeeper.cpp
     src/GpioTrigger.cpp
     src/ImageFile.cpp
+    src/Log.cpp
     src/Output.cpp
     src/Scanner.cpp
     src/V4l2Camera.cpp

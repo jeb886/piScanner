@@ -99,6 +99,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_SOURCE,
         OPT_REPEAT,
         OPT_EXPECT,
+        OPT_LOG_FILE,
         OPT_VERSION
     };
     static const option options[] = {
@@ -142,6 +143,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"source", required_argument, nullptr, OPT_SOURCE},
         {"repeat", required_argument, nullptr, OPT_REPEAT},
         {"expect", no_argument, nullptr, OPT_EXPECT},
+        {"log-file", required_argument, nullptr, OPT_LOG_FILE},
         {"help", no_argument, nullptr, 'h'},
         {"version", no_argument, nullptr, OPT_VERSION},
         {nullptr, 0, nullptr, 0},
@@ -315,6 +317,9 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         case OPT_EXPECT:
             config.expect = true;
             break;
+        case OPT_LOG_FILE:
+            config.logFile = optarg;
+            break;
         case OPT_VERSION:
             config.command = "version";
             return config;
@@ -438,7 +443,7 @@ std::string usageText()
            "  --buffers N --threads N --formats LIST --try-harder --no-rotate --no-downscale\n"
            "  --max-symbols N --binarizer local|global|bool|fixed --roi x,y,w,h\n"
            "  --output text|json|hid --hid-device PATH --beeper-line N --beeper-ms N --beeper-pwmchip PATH --beeper-pwm-channel N\n"
-           "  --stats --exposure N --focus N --gain N -v --help --version\n"
+           "  --stats --exposure N --focus N --gain N --log-file PATH -v --help --version\n"
            "Trigger options: --trigger gpio|stdin --gpio-chip PATH --gpio-line N --gpio-bias pull-up|pull-down|disable\n"
            "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
            "File source (scan/trigger, replaces the camera): --source IMG_OR_DIR (repeatable)\n"

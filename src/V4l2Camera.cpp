@@ -1,5 +1,6 @@
 #include "V4l2Camera.h"
 
+#include "Log.h"
 #include "Output.h"
 
 #include <fcntl.h>
@@ -230,6 +231,8 @@ V4l2Camera::V4l2Camera(const Config& config)
             stride_ = width_ * (format_ == PixelFormat::YUYV ? 2 : 1);
         std::cerr << "Camera: " << config.device << " " << width_ << "x" << height_ << " "
                   << formatName(format.fmt.pix.pixelformat) << '\n';
+        logLine("camera " + config.device + " " + std::to_string(width_) + "x" + std::to_string(height_) + " " +
+                formatName(format.fmt.pix.pixelformat));
 
         v4l2_streamparm parameters{};
         parameters.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;

@@ -228,7 +228,7 @@ else
     printf '%s\n' \
         "# Arguments passed to the piScanner service. See \`piscanner --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCANNER_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 18"' >"$CONFIG_PATH"
+        'PISCANNER_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 18 --log-file /run/piscanner/piscanner.log"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
@@ -237,6 +237,12 @@ if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
    grep -Eq -- '--beeper-line[[:space:]]+27([[:space:]]|$)' "$CONFIG_PATH"; then
     sed -i -E 's/--beeper-line[[:space:]]+27/--beeper-line 18/g' "$CONFIG_PATH"
     printf 'Updated %s from GPIO27 to GPIO18 for the PWM beeper.\n' "$CONFIG_PATH"
+fi
+
+if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
+   grep -q '^PISCANNER_ARGS=' "$CONFIG_PATH" && ! grep -q -- '--log-file' "$CONFIG_PATH"; then
+    sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --log-file /run/piscanner/piscanner.log"|' "$CONFIG_PATH"
+    printf 'Added --log-file /run/piscanner/piscanner.log to %s.\n' "$CONFIG_PATH"
 fi
 
 # Hardware PWM overlay for the passive beeper on GPIO18 (header pin 12).

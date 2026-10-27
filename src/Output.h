@@ -51,6 +51,18 @@ private:
     std::mutex mutex_;
 };
 
+// Decorates another sink: appends a one-line entry per result/timeout to
+// the file log (a no-op unless --log-file opened successfully).
+class LogSink final : public ResultSink {
+public:
+    explicit LogSink(ResultSink& inner) : inner_(inner) {}
+    void onResult(const ScanResult& result) override;
+    void onTimeout(std::uint64_t timestampUs) override;
+
+private:
+    ResultSink& inner_;
+};
+
 class PwmBeeper;
 
 // Decorates another sink: forwards the result and plays a decode beep.
