@@ -22,7 +22,7 @@ std::string timestamp()
     clock_gettime(CLOCK_REALTIME, &now);
     tm local{};
     localtime_r(&now.tv_sec, &local);
-    char text[24];
+    char text[64];
     std::snprintf(text, sizeof(text), "%04d-%02d-%02d %02d:%02d:%02d.%03d", local.tm_year + 1900,
                   local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec,
                   static_cast<int>(now.tv_nsec / 1000000));
