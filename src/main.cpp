@@ -78,9 +78,11 @@ int main(int argc, char* argv[])
         else
             sink = std::make_unique<TextSink>();
         std::unique_ptr<PwmBeeper> beeper;
+        std::unique_ptr<ResultSink> innerSink;
         if (config.beeperLine >= 0) {
             beeper = std::make_unique<PwmBeeper>(config);
-            sink = std::make_unique<BeepSink>(*sink, *beeper);
+            innerSink = std::move(sink);
+            sink = std::make_unique<BeepSink>(*innerSink, *beeper);
             beeper->startup();
         }
         std::signal(SIGINT, requestShutdownSignal);
