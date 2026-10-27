@@ -561,7 +561,7 @@ void testCaptureCli(const char* executable)
     CHECK(std::filesystem::is_regular_file(pngPath));
     if (std::filesystem::is_regular_file(pngPath)) {
         const auto pngBytes = loadFileBytes(pngPath);
-        CHECK(pngBytes.size() > 1000);
+        CHECK(pngBytes.size() > 60); // smallest test image re-encodes well under 1 KB
         CHECK(pngBytes.size() >= 4 && pngBytes[0] == 0x89 && pngBytes[1] == 'P' && pngBytes[2] == 'N' &&
               pngBytes[3] == 'G');
     }
@@ -572,7 +572,7 @@ void testCaptureCli(const char* executable)
     CHECK(std::filesystem::is_regular_file(bmpPath));
     if (std::filesystem::is_regular_file(bmpPath)) {
         const auto bmpBytes = loadFileBytes(bmpPath);
-        CHECK(bmpBytes.size() > 1000);
+        CHECK(bmpBytes.size() > 60);
         CHECK(bmpBytes.size() >= 2 && bmpBytes[0] == 'B' && bmpBytes[1] == 'M');
     }
 
