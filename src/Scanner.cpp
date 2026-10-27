@@ -2,6 +2,7 @@
 
 #include "Decoder.h"
 #include "Dedupe.h"
+#include "Log.h"
 
 #include <algorithm>
 #include <chrono>
@@ -72,6 +73,7 @@ struct Scanner::Impl {
 
     void fail(const std::string& message)
     {
+        logLine("error " + message);
         {
             std::lock_guard lock(mutex);
             if (!failed.exchange(true))
@@ -173,6 +175,7 @@ struct Scanner::Impl {
                 } catch (const std::exception& exception) {
                     if (config.verbose)
                         std::cerr << "warning: frame decode failed: " << exception.what() << '\n';
+                    logLine(std::string("decode error ") + exception.what());
                 }
             }
 
@@ -277,6 +280,7 @@ struct Scanner::Impl {
                                 discardPendingLocked();
                             }
                         }
+                        logLine(event.type == TriggerEventType::Pressed ? "trigger press" : "trigger release");
                     }
                 } catch (const std::exception& exception) {
                     fail(exception.what());
@@ -319,6 +323,7 @@ struct Scanner::Impl {
             if (worker.joinable())
                 worker.join();
         }
+        logLine("stop");
         if (failed.load()) {
             std::cerr << "error: " << errorText << '\n';
             return 1;

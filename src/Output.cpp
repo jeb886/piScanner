@@ -1,5 +1,6 @@
 #include "Output.h"
 
+#include "Log.h"
 #include "PwmBeeper.h"
 #include "HidKeys.h"
 
@@ -112,6 +113,36 @@ HidSink::~HidSink()
 {
     if (fd_ >= 0)
         close(fd_);
+}
+
+namespace {
+
+std::string logSafeText(const std::string& text)
+{
+    std::string clean = text.substr(0, 160);
+    for (auto& ch : clean) {
+        const auto c = static_cast<unsigned char>(ch);
+        if (c < 0x20 || c == 0x7f)
+            ch = '?';
+    }
+    return clean;
+}
+
+}
+
+void LogSink::onResult(const ScanResult& result)
+{
+    std::ostringstream line;
+    line << "decode " << result.format << ' ' << std::fixed << std::setprecision(1) << result.decodeMs << "ms \""
+         << logSafeText(result.text) << '"';
+    logLine(line.str());
+    inner_.onResult(result);
+}
+
+void LogSink::onTimeout(std::uint64_t timestampUs)
+{
+    logLine("scan timeout");
+    inner_.onTimeout(timestampUs);
 }
 
 void BeepSink::onResult(const ScanResult& result)

@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "DecodeFiles.h"
 #include "FileFrameSource.h"
+#include "Log.h"
 #include "PwmBeeper.h"
 #include "GpioTrigger.h"
 #include "Output.h"
@@ -23,6 +24,15 @@ int main(int argc, char* argv[])
         return 2;
     }
     const Config& config = *parsed;
+    if (!config.logFile.empty()) {
+        try {
+            logInit(config.logFile);
+        } catch (const std::exception& exception) {
+            std::cerr << "warning: " << exception.what() << '\n';
+        }
+        logLine("start " + config.command + " dev=" + config.device + " " + std::to_string(config.width) + "x" +
+                std::to_string(config.height) + " out=" + config.output);
+    }
     if (config.command == "help") {
         std::cout << usageText();
         return 0;
@@ -79,17 +89,23 @@ int main(int argc, char* argv[])
             sink = std::make_unique<TextSink>();
         std::unique_ptr<PwmBeeper> beeper;
         std::unique_ptr<ResultSink> innerSink;
+        std::unique_ptr<ResultSink> logSinkInner;
         if (config.beeperLine >= 0) {
             beeper = std::make_unique<PwmBeeper>(config);
             innerSink = std::move(sink);
             sink = std::make_unique<BeepSink>(*innerSink, *beeper);
             beeper->startup();
         }
+        if (logEnabled()) {
+            logSinkInner = std::move(sink);
+            sink = std::make_unique<LogSink>(*logSinkInner);
+        }
         std::signal(SIGINT, requestShutdownSignal);
         std::signal(SIGTERM, requestShutdownSignal);
         Scanner scanner(config, *source, *sink, trigger.get());
         return scanner.run();
     } catch (const std::exception& exception) {
+        logLine(std::string("error ") + exception.what());
         std::cerr << "error: " << exception.what() << '\n';
         return 1;
     }

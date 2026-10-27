@@ -16,6 +16,8 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+# Writable tmpfs dir for --log-file (in-memory; survives until reboot).
+RuntimeDirectory=piscanner
 
 [Install]
 WantedBy=multi-user.target
