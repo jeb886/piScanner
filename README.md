@@ -75,11 +75,14 @@ piscanner trigger --gpio-line 17
 piscanner trigger --trigger stdin --output json
 piscanner decode tests/data/qr --expect
 piscanner bench sample.pgm --iterations 100
+piscanner capture shot.png
 ```
 
 `scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. With `--beeper-line N` a short medium beep follows every decoded result (the service default is GPIO18, 80 ms). `--beeper-line` accepts hardware-PWM GPIOs 12, 13, 18, or 19; use `--beeper-pwmchip PATH` and `--beeper-pwm-channel N` to override auto-detection. Diagnostics and optional statistics go to stderr. `--log-file PATH` appends a brief timestamped event log (start, camera negotiation, trigger press/release, each decode with symbology + decode ms, timeouts, errors); the service logs to tmpfs at `/run/piscanner/piscanner.log` via `RuntimeDirectory`, rotated once at 256 KB.
 
 `decode` prints each file's result; with `--expect` it compares against `<name>.txt` sidecars (`NONE` = no barcode expected) and exits non-zero on any mismatch. `scan`/`trigger` accept `--source IMG_OR_DIR` (repeatable) instead of `--device` to replay image files through the full pipeline at `--fps`, looping `--repeat N` times (0 = forever) — a mock camera for test automation.
+
+`capture` grabs a single frame and writes it as an image file (`.bmp`, `.png`, `.jpg`/`.jpeg`, or `.tga`, chosen by extension) — a debugging utility; nothing is decoded. `--warmup N` (default 8) discards N frames first so auto-exposure can settle; camera options like `--device`, `--width`, `--height`, `--pixfmt`, and `--exposure` apply, and `--source` works too. MJPEG frames write verbatim for `.jpg` output and decompress to RGB for other formats.
 
 ## USB keyboard-wedge mode
 

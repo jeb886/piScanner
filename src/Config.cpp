@@ -56,7 +56,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         return config;
     }
     if (config.command != "devices" && config.command != "scan" && config.command != "trigger" &&
-        config.command != "decode" && config.command != "bench") {
+        config.command != "decode" && config.command != "bench" && config.command != "capture") {
         error = "unknown subcommand: " + config.command;
         return std::nullopt;
     }
@@ -100,6 +100,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_REPEAT,
         OPT_EXPECT,
         OPT_LOG_FILE,
+        OPT_WARMUP,
         OPT_VERSION
     };
     static const option options[] = {
@@ -144,6 +145,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"repeat", required_argument, nullptr, OPT_REPEAT},
         {"expect", no_argument, nullptr, OPT_EXPECT},
         {"log-file", required_argument, nullptr, OPT_LOG_FILE},
+        {"warmup", required_argument, nullptr, OPT_WARMUP},
         {"help", no_argument, nullptr, 'h'},
         {"version", no_argument, nullptr, OPT_VERSION},
         {nullptr, 0, nullptr, 0},
@@ -320,6 +322,10 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         case OPT_LOG_FILE:
             config.logFile = optarg;
             break;
+        case OPT_WARMUP:
+            if (!assignInt("warmup", config.warmup))
+                return std::nullopt;
+            break;
         case OPT_VERSION:
             config.command = "version";
             return config;
@@ -336,6 +342,16 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
             return std::nullopt;
         }
         config.benchFile = argv[optind++];
+        if (optind < argc) {
+            error = "unexpected positional argument: " + std::string(argv[optind]);
+            return std::nullopt;
+        }
+    } else if (config.command == "capture") {
+        if (optind >= argc) {
+            error = "capture requires an output file (.bmp, .png, .jpg, or .tga)";
+            return std::nullopt;
+        }
+        config.captureFile = argv[optind++];
         if (optind < argc) {
             error = "unexpected positional argument: " + std::string(argv[optind]);
             return std::nullopt;
@@ -403,8 +419,13 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         error = "--repeat must be >= 0 (0 means loop forever)";
         return std::nullopt;
     }
-    if (!config.source.empty() && config.command != "scan" && config.command != "trigger") {
-        error = "--source is only valid with scan or trigger";
+    if (config.warmup < 0) {
+        error = "--warmup must be >= 0";
+        return std::nullopt;
+    }
+    if (!config.source.empty() && config.command != "scan" && config.command != "trigger" &&
+        config.command != "capture") {
+        error = "--source is only valid with scan, trigger, or capture";
         return std::nullopt;
     }
     if (config.expect && config.command != "decode") {
@@ -438,6 +459,7 @@ std::string usageText()
            "  piscanner trigger [options]\n"
            "  piscanner decode <files/dirs> [--expect] [decoder options]\n"
            "  piscanner bench <file.pgm> [--iterations N] [decoder options]\n"
+           "  piscanner capture <file.bmp|png|jpg|tga> [camera options] [--warmup N]\n"
            "\n"
            "Common options: --device PATH --width N --height N --fps N --pixfmt auto|yuyv|grey|mjpeg\n"
            "  --buffers N --threads N --formats LIST --try-harder --no-rotate --no-downscale\n"
@@ -446,7 +468,7 @@ std::string usageText()
            "  --stats --exposure N --focus N --gain N --log-file PATH -v --help --version\n"
            "Trigger options: --trigger gpio|stdin --gpio-chip PATH --gpio-line N --gpio-bias pull-up|pull-down|disable\n"
            "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
-           "File source (scan/trigger, replaces the camera): --source IMG_OR_DIR (repeatable)\n"
+           "File source (scan/trigger/capture, replaces the camera): --source IMG_OR_DIR (repeatable)\n"
            "  --repeat N (passes over the images, 0=forever). decode: compares to <name>.txt\n"
            "  sidecars with --expect (sidecar text NONE means no barcode expected).\n";
 }

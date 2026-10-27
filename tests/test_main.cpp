@@ -229,6 +229,23 @@ void testArguments()
     CHECK(logged.has_value());
     if (logged)
         CHECK(logged->logFile == "/tmp/piscanner-test.log");
+
+    auto capture = parse({"piscanner", "capture", "shot.png", "--warmup", "3"}, error);
+    CHECK(capture.has_value());
+    if (capture) {
+        CHECK(capture->captureFile == "shot.png");
+        CHECK(capture->warmup == 3);
+    }
+    auto captureDefault = parse({"piscanner", "capture", "shot.png"}, error);
+    CHECK(captureDefault.has_value());
+    if (captureDefault)
+        CHECK(captureDefault->warmup == 8);
+    CHECK(!parse({"piscanner", "capture"}, error).has_value());
+    CHECK(!parse({"piscanner", "capture", "a.png", "b.png"}, error).has_value());
+    CHECK(!parse({"piscanner", "capture", "shot.png", "--warmup", "-1"}, error).has_value());
+    CHECK(parse({"piscanner", "capture", "shot.png", "--warmup", "0"}, error).has_value());
+    CHECK(parse({"piscanner", "capture", "shot.png", "--source", "some/dir"}, error).has_value());
+    CHECK(!parse({"piscanner", "bench", "f.pgm", "--source", "some/dir"}, error).has_value());
 }
 
 // Every character of a representative barcode charset must map to a keycode,
@@ -528,6 +545,41 @@ void testFileLogging(const char* executable)
     std::filesystem::remove(logPath);
 }
 
+// capture with a file source: writes a real image file of the requested
+// format through the frame-source path (no camera needed).
+void testCaptureCli(const char* executable)
+{
+    const auto dir = std::filesystem::temp_directory_path();
+    const auto pngPath = (dir / "piscanner-capture-test.png").string();
+    const auto bmpPath = (dir / "piscanner-capture-test.bmp").string();
+    std::filesystem::remove(pngPath);
+    std::filesystem::remove(bmpPath);
+
+    const std::string pngCmd = std::string("\"") + executable + "\" capture \"" + pngPath + "\" --source \"" +
+                               g_dataDir + "/qr\" > /dev/null";
+    CHECK(std::system(pngCmd.c_str()) == 0);
+    CHECK(std::filesystem::is_regular_file(pngPath));
+    if (std::filesystem::is_regular_file(pngPath)) {
+        const auto pngBytes = loadFileBytes(pngPath);
+        CHECK(pngBytes.size() > 1000);
+        CHECK(pngBytes.size() >= 4 && pngBytes[0] == 0x89 && pngBytes[1] == 'P' && pngBytes[2] == 'N' &&
+              pngBytes[3] == 'G');
+    }
+
+    const std::string bmpCmd = std::string("\"") + executable + "\" capture \"" + bmpPath + "\" --source \"" +
+                               g_dataDir + "/qr\" > /dev/null";
+    CHECK(std::system(bmpCmd.c_str()) == 0);
+    CHECK(std::filesystem::is_regular_file(bmpPath));
+    if (std::filesystem::is_regular_file(bmpPath)) {
+        const auto bmpBytes = loadFileBytes(bmpPath);
+        CHECK(bmpBytes.size() > 1000);
+        CHECK(bmpBytes.size() >= 2 && bmpBytes[0] == 'B' && bmpBytes[1] == 'M');
+    }
+
+    std::filesystem::remove(pngPath);
+    std::filesystem::remove(bmpPath);
+}
+
 }
 
 // Pixel-format negotiation: auto prefers uncompressed formats but falls
@@ -590,6 +642,7 @@ int main(int argc, char* argv[])
         testTriggerWithFileSource();
         testDecodeCli(argv[1]);
         testFileLogging(argv[1]);
+        testCaptureCli(argv[1]);
         testBench(argv[1], argv[2]);
     } else {
         CHECK(false);

@@ -48,6 +48,7 @@ endif()
 
 set(PISCANNER_CORE_SOURCES
     src/Bench.cpp
+    src/Capture.cpp
     src/Config.cpp
     src/DecodeFiles.cpp
     src/Decoder.cpp

@@ -1,4 +1,5 @@
 #include "Bench.h"
+#include "Capture.h"
 #include "Config.h"
 #include "DecodeFiles.h"
 #include "FileFrameSource.h"
@@ -61,6 +62,14 @@ int main(int argc, char* argv[])
     if (config.command == "decode") {
         try {
             return runDecodeFiles(config, std::cout);
+        } catch (const std::exception& exception) {
+            std::cerr << "error: " << exception.what() << '\n';
+            return 1;
+        }
+    }
+    if (config.command == "capture") {
+        try {
+            return runCapture(config, config.captureFile);
         } catch (const std::exception& exception) {
             std::cerr << "error: " << exception.what() << '\n';
             return 1;

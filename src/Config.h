@@ -50,8 +50,10 @@ struct Config {
     std::optional<int> gain;
     std::string benchFile;
     int iterations = 100;
-    // File-source (mock camera) options for scan/trigger: image files and/or
-    // directories fed through the pipeline instead of /dev/videoN.
+    std::string captureFile;
+    int warmup = 8; // capture: frames to discard before the one written out
+    // File-source (mock camera) options for scan/trigger/capture: image files
+    // and/or directories fed through the pipeline instead of /dev/videoN.
     std::vector<std::string> source;
     int repeat = 1;           // passes over the image list; 0 = loop forever
     bool expect = false;      // decode: compare results to .txt sidecars
