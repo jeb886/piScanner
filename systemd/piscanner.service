@@ -7,9 +7,10 @@ Type=simple
 User=piscanner
 Group=piscanner
 EnvironmentFile=-/etc/default/piscanner
-# Detach the text console from the SPI panel's framebuffer so getty/fbcon
-# output (and the blinking cursor) can't overwrite the piScanner UI.
-ExecStartPre=-/bin/sh -c 'for v in /sys/class/vtconsole/vtcon*/bind; do echo 0 > "$v" 2>/dev/null; done'
+# Keep the text console off the SPI panel's framebuffer. The primary
+# mechanism is fbcon=vc:2-63 on the kernel cmdline (tty1 stays on the
+# dummy console); this unbind is the fallback when that param is absent.
+ExecStartPre=-+/bin/sh -c 'grep -q fbcon=vc: /proc/cmdline || for v in /sys/class/vtconsole/vtcon*/bind; do echo 0 > "$v" 2>/dev/null; done'
 ExecStart=/usr/local/bin/piscanner $PISCANNER_ARGS
 Restart=always
 RestartSec=3

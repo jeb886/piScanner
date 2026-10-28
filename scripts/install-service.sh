@@ -18,6 +18,7 @@ Options:
   --no-build        Use the existing build binary
   --build-dir DIR   Select a build directory (default: build)
   --with-display    Configure the 3.5" SPI display (ILI9486) + touch
+  --fast-boot       Disable nonessential services to speed up boot
   -h, --help        Show this help
 EOF
 }
@@ -25,6 +26,7 @@ EOF
 UNINSTALL=0
 NO_BUILD=0
 WITH_DISPLAY=0
+FAST_BOOT=0
 BUILD_DIR=build
 
 while (($# > 0)); do
@@ -39,6 +41,10 @@ while (($# > 0)); do
         ;;
     --with-display)
         WITH_DISPLAY=1
+        shift
+        ;;
+    --fast-boot)
+        FAST_BOOT=1
         shift
         ;;
     --build-dir)
@@ -160,6 +166,30 @@ ensure_pwm_overlay() {
         append_config_line "$config" 'dtoverlay=pwm,pin=12,func=4'
         printf 'Added PWM beeper overlay to %s (reboot required).\n' "$config"
     fi
+}
+
+ensure_fbcon_vc() {
+    local cmdline=$1 tmp
+    if [[ ! -s "$cmdline" ]]; then
+        printf 'warning: %s is missing or empty; restore cmdline.txt manually and re-run the installer\n' "$cmdline" >&2
+        return
+    fi
+    if grep -q 'fbcon=vc:' "$cmdline"; then
+        return
+    fi
+    tmp=${cmdline}.tmp
+    { tr -d '\r\n' <"$cmdline"; printf ' fbcon=vc:2-63\n'; } >"$tmp"
+    if [[ ! -s "$tmp" ]] || [[ $(wc -l <"$tmp") -ne 1 ]]; then
+        printf 'warning: failed to build updated %s; leaving it untouched\n' "$cmdline" >&2
+        rm -f -- "$tmp"
+        return
+    fi
+    # Keep a backup unless a non-empty one already exists (overwrite an empty .bak).
+    if [[ ! -s "${cmdline}.bak" ]]; then
+        cp -- "$cmdline" "${cmdline}.bak"
+    fi
+    mv -- "$tmp" "$cmdline"
+    printf 'Added fbcon=vc:2-63 to %s (reboot required).\n' "$cmdline"
 }
 
 if ((UNINSTALL)); then
@@ -289,16 +319,14 @@ if ((WITH_DISPLAY)); then
     if getent group input >/dev/null 2>&1; then
         usermod -aG input piscanner 2>/dev/null || true
     fi
-    # Keep the kernel console off the panel: no console=tty1 on the kernel
-    # command line, and the service unit unbinds vtcon0 before painting.
+    # Keep fbcon off the panel: fbcon=vc:2-63 leaves tty1 on the dummy
+    # console, so kernel/getty output never reaches the SPI framebuffer.
+    # A USB keyboard can still Ctrl+Alt+F2 to a getty on tty2. The service
+    # unit unbinds vtconsoles at start as a fallback when this is absent.
     local_cmdline=$(for path in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
         [[ -f "$path" ]] && { printf '%s\n' "$path"; break; }
     done)
-    if [[ -n "$local_cmdline" ]] && grep -q 'console=tty1' "$local_cmdline"; then
-        [[ -f "${local_cmdline}.bak" ]] || cp "$local_cmdline" "${local_cmdline}.bak"
-        sed -i 's/console=tty1 //' "$local_cmdline"
-        printf 'Removed console=tty1 from %s (reboot required).\n' "$local_cmdline"
-    fi
+    ensure_fbcon_vc "${local_cmdline:-/boot/firmware/cmdline.txt}"
     # Show results on the panel when the service starts.
     if grep -q '^PISCANNER_ARGS=' "$CONFIG_PATH" 2>/dev/null && ! grep -q -- '--display' "$CONFIG_PATH"; then
         sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --display auto --display-rotate 270"|' "$CONFIG_PATH"
@@ -330,6 +358,23 @@ chmod 0644 "$DROPIN_PATH"
 
 systemctl daemon-reload
 systemctl enable piscanner.service
+
+if ((FAST_BOOT)); then
+    systemctl mask NetworkManager-wait-online.service
+    if [[ -d /etc/cloud ]]; then
+        touch /etc/cloud/cloud-init.disabled
+    fi
+    # getty@tty1, other gettys, and keyboard-setup stay enabled: local USB
+    # keyboard login must keep working.
+    systemctl disable \
+        bluetooth.service avahi-daemon.service avahi-daemon.socket \
+        rpi-eeprom-update.service rpi-resize-swap-file.service \
+        cloud-config.service cloud-final.service console-setup.service \
+        e2scrub_reap.service e2scrub_all.timer udisks2.service \
+        dpkg-db-backup.timer 2>/dev/null || true
+    printf '%s\n' 'Fast boot: masked NetworkManager-wait-online, disabled cloud-init and nonessential services (getty/keyboard kept).'
+fi
+
 if ! systemctl restart piscanner.service; then
     printf '%s\n' 'warning: service restart failed; inspect the service status and journal' >&2
 fi
