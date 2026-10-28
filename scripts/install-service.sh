@@ -239,7 +239,7 @@ else
     printf '%s\n' \
         "# Arguments passed to the piScanner service. See \`piscanner --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCANNER_ARGS="trigger --trigger gpio --gpio-line 16 --device /dev/video0 --output hid --beeper-line 12 --log-file /run/piscanner/piscanner.log --display auto"' >"$CONFIG_PATH"
+        'PISCANNER_ARGS="trigger --trigger gpio --gpio-line 16 --device /dev/video0 --output hid --beeper-line 12 --log-file /run/piscanner/piscanner.log --display auto --display-rotate 270"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
@@ -274,6 +274,13 @@ if ((WITH_DISPLAY)); then
         append_config_line "$CONFIG_TXT" 'dtparam=spi=on'
         printf 'Enabled SPI in %s (reboot required).\n' "$CONFIG_TXT"
     fi
+    # Remove stale overlays from the earlier mipi-dbi approach — they
+    # double-claim spi0.0/0.1 and stop the panel's framebuffer entirely.
+    if grep -Eq 'mipi-dbi-spi|compatible=ili9486|dc-gpio=24|dtoverlay=ads7846' "$CONFIG_TXT"; then
+        sed -i '/mipi-dbi-spi,spi0-0/d;/compatible=ili9486/d;/width=480,height=320/d;/dc-gpio=24,reset-gpio=25/d;/dtoverlay=ads7846/d' \
+            "$CONFIG_TXT"
+        printf 'Removed stale mipi-dbi/ads7846 overlay lines from %s (reboot required).\n' "$CONFIG_TXT"
+    fi
     if ! config_has_effective_line "$CONFIG_TXT" 'dtoverlay=piscreen'; then
         append_config_line "$CONFIG_TXT" 'dtoverlay=piscreen'
         printf 'Added piscreen display/touch overlay to %s (reboot required).\n' "$CONFIG_TXT"
@@ -282,10 +289,24 @@ if ((WITH_DISPLAY)); then
     if getent group input >/dev/null 2>&1; then
         usermod -aG input piscanner 2>/dev/null || true
     fi
+    # Keep the kernel console off the panel: no console=tty1 on the kernel
+    # command line, and the service unit unbinds vtcon0 before painting.
+    local_cmdline=$(for path in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
+        [[ -f "$path" ]] && { printf '%s\n' "$path"; break; }
+    done)
+    if [[ -n "$local_cmdline" ]] && grep -q 'console=tty1' "$local_cmdline"; then
+        [[ -f "${local_cmdline}.bak" ]] || cp "$local_cmdline" "${local_cmdline}.bak"
+        sed -i 's/console=tty1 //' "$local_cmdline"
+        printf 'Removed console=tty1 from %s (reboot required).\n' "$local_cmdline"
+    fi
     # Show results on the panel when the service starts.
     if grep -q '^PISCANNER_ARGS=' "$CONFIG_PATH" 2>/dev/null && ! grep -q -- '--display' "$CONFIG_PATH"; then
-        sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --display auto"|' "$CONFIG_PATH"
-        printf 'Added --display auto to %s.\n' "$CONFIG_PATH"
+        sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --display auto --display-rotate 270"|' "$CONFIG_PATH"
+        printf 'Added --display auto --display-rotate 270 to %s.\n' "$CONFIG_PATH"
+    elif grep -q '^PISCANNER_ARGS=' "$CONFIG_PATH" 2>/dev/null && grep -q -- '--display' "$CONFIG_PATH" &&
+         ! grep -q -- '--display-rotate' "$CONFIG_PATH"; then
+        sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --display-rotate 270"|' "$CONFIG_PATH"
+        printf 'Added --display-rotate 270 to %s.\n' "$CONFIG_PATH"
     fi
 fi
 
