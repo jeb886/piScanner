@@ -1,6 +1,6 @@
 # piScanner
 
-`piScanner` is a low-latency Raspberry Pi 5 barcode scanner for a generic UVC USB webcam and an external GPIO trigger. Results are sent to a CLI sink today; the sink interface leaves room for a display later.
+`piScanner` is a low-latency Raspberry Pi 5 barcode scanner for a generic UVC USB webcam and an external GPIO trigger. Results go to a CLI/HID/JSON sink and, optionally, a 3.5" SPI TFT panel via `--display`.
 
 Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 
@@ -74,13 +74,14 @@ piscanner devices
 piscanner scan --device /dev/video0
 piscanner scan --width 640 --height 480 --pixfmt yuyv --formats QRCode,Code128 --stats
 piscanner trigger --gpio-line 16
+piscanner trigger --display auto
 piscanner trigger --trigger stdin --output json
 piscanner decode tests/data/qr --expect
 piscanner bench sample.pgm --iterations 100
 piscanner capture shot.png
 ```
 
-`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. With `--beeper-line N` a short medium beep follows every decoded result (the service default is GPIO18, 80 ms). `--beeper-line` accepts hardware-PWM GPIOs 12, 13, 18, or 19; use `--beeper-pwmchip PATH` and `--beeper-pwm-channel N` to override auto-detection. Diagnostics and optional statistics go to stderr. `--log-file PATH` appends a brief timestamped event log (start, camera negotiation, trigger press/release, each decode with symbology + trigger-to-result ms + library decode ms, timeouts, errors); the service logs to tmpfs at `/run/piscanner/piscanner.log` via `RuntimeDirectory`, rotated once at 256 KB.
+`scan` runs continuously. `trigger` starts one scan session per press by default; use `--trigger-mode level` to scan while held. Press Enter to trigger with `--trigger stdin`. Output is plain decoded text by default, one JSON object per line with `--output json`, or keystrokes into the host PC with `--output hid`. With `--beeper-line N` a short medium beep follows every decoded result (the service default is GPIO12, 80 ms). `--beeper-line` accepts hardware-PWM GPIOs 12, 13, 18, or 19; use `--beeper-pwmchip PATH` and `--beeper-pwm-channel N` to override auto-detection. Diagnostics and optional statistics go to stderr. `--log-file PATH` appends a brief timestamped event log (start, camera negotiation, trigger press/release, each decode with symbology + trigger-to-result ms + library decode ms, timeouts, errors); the service logs to tmpfs at `/run/piscanner/piscanner.log` via `RuntimeDirectory`, rotated once at 256 KB.
 
 `decode` prints each file's result; with `--expect` it compares against `<name>.txt` sidecars (`NONE` = no barcode expected) and exits non-zero on any mismatch. `scan`/`trigger` accept `--source IMG_OR_DIR` (repeatable) instead of `--device` to replay image files through the full pipeline at `--fps`, looping `--repeat N` times (0 = forever) — a mock camera for test automation.
 
@@ -91,7 +92,7 @@ piscanner capture shot.png
 `install-service.sh` also configures the Pi's USB-C port as a USB gadget, so the Pi enumerates as a standard USB keyboard on whatever PC it is plugged into (no drivers needed on Windows, macOS, or Linux). Pressing the GPIO trigger scans a barcode and piScanner types the decoded text plus Enter, like a commercial scanner wedge. The install:
 
 - adds `dtoverlay=dwc2,dr_mode=peripheral` to the `[all]` section of `config.txt` (one reboot needed on first install),
-- adds `dtoverlay=pwm,pin=18,func=2` to `config.txt` for the passive beeper (reboot required),
+- adds `dtoverlay=pwm,pin=12,func=4` to `config.txt` for the passive beeper (reboot required),
 - loads `libcomposite` and runs `piscanner-gadget.service` at boot, which creates a keyboard gadget on `/dev/hidg0` via configfs,
 - installs a udev rule so the unprivileged `piscanner` service user can write it,
 - defaults the service to `trigger --trigger gpio --output hid`.
@@ -111,4 +112,4 @@ Note: the Pi 5's USB-C port is also its only power input, so the PC powers the P
 
 ## Architecture
 
-One capture thread keeps the camera streaming and hands buffers to independent decoder workers. The pipeline is latest-frame-wins: stale pending frames are returned to the camera rather than building latency. Each worker owns its decoder. `ResultSink` separates scanning from text/JSON output and is the seam for a future display.
+One capture thread keeps the camera streaming and hands buffers to independent decoder workers. The pipeline is latest-frame-wins: stale pending frames are returned to the camera rather than building latency. Each worker owns its decoder. `ResultSink` separates scanning from text/JSON/HID output; `DisplaySink` decorates it to paint the panel, `BeepSink` and `LogSink` wrap it further for the beeper and event log.
