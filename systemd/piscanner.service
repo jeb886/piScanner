@@ -8,8 +8,8 @@ User=piscanner
 Group=piscanner
 EnvironmentFile=-/etc/default/piscanner
 # Detach the text console from the SPI panel's framebuffer so getty/fbcon
-# output can't overwrite the piScanner UI between paints.
-ExecStartPre=-/bin/sh -c 'echo 0 > /sys/class/vtconsole/vtcon0/bind'
+# output (and the blinking cursor) can't overwrite the piScanner UI.
+ExecStartPre=-/bin/sh -c 'for v in /sys/class/vtconsole/vtcon*/bind; do echo 0 > "$v" 2>/dev/null; done'
 ExecStart=/usr/local/bin/piscanner $PISCANNER_ARGS
 Restart=always
 RestartSec=3
