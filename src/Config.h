@@ -38,7 +38,7 @@ struct Config {
     bool verbose = false;
     std::string trigger = "gpio";
     std::string gpioChip;
-    int gpioLine = 17;
+    int gpioLine = 16;
     std::string gpioBias = "pull-up";
     int debounceUs = 5000;
     bool activeLow = true;
@@ -56,6 +56,9 @@ struct Config {
     // and/or directories fed through the pipeline instead of /dev/videoN.
     std::vector<std::string> source;
     int repeat = 1;           // passes over the image list; 0 = loop forever
+    // SPI panel output (fbdev path or "auto"); empty = no display.
+    std::string displayDevice;
+    int displayLines = 4;     // history rows shown under the latest result
     bool expect = false;      // decode: compare results to .txt sidecars
     std::vector<std::string> decodeInputs; // decode: positional files/dirs
 };

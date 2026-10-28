@@ -2,6 +2,7 @@
 #include "Capture.h"
 #include "Config.h"
 #include "DecodeFiles.h"
+#include "DisplaySink.h"
 #include "FileFrameSource.h"
 #include "Log.h"
 #include "PwmBeeper.h"
@@ -97,8 +98,15 @@ int main(int argc, char* argv[])
         else
             sink = std::make_unique<TextSink>();
         std::unique_ptr<PwmBeeper> beeper;
+        std::unique_ptr<ResultSink> displayInner;
         std::unique_ptr<ResultSink> innerSink;
         std::unique_ptr<ResultSink> logSinkInner;
+        // Display sits closest to the base sink so the beeper and log still
+        // see every event even when the panel draws slowly (or not at all).
+        if (!config.displayDevice.empty()) {
+            displayInner = std::move(sink);
+            sink = std::make_unique<DisplaySink>(*displayInner, config);
+        }
         if (config.beeperLine >= 0) {
             beeper = std::make_unique<PwmBeeper>(config);
             innerSink = std::move(sink);
