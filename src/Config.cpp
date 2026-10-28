@@ -103,6 +103,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_WARMUP,
         OPT_DISPLAY,
         OPT_DISPLAY_LINES,
+        OPT_DISPLAY_ROTATE,
         OPT_VERSION
     };
     static const option options[] = {
@@ -150,6 +151,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"warmup", required_argument, nullptr, OPT_WARMUP},
         {"display", required_argument, nullptr, OPT_DISPLAY},
         {"display-lines", required_argument, nullptr, OPT_DISPLAY_LINES},
+        {"display-rotate", required_argument, nullptr, OPT_DISPLAY_ROTATE},
         {"help", no_argument, nullptr, 'h'},
         {"version", no_argument, nullptr, OPT_VERSION},
         {nullptr, 0, nullptr, 0},
@@ -337,6 +339,10 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
             if (!assignInt("display-lines", config.displayLines))
                 return std::nullopt;
             break;
+        case OPT_DISPLAY_ROTATE:
+            if (!assignInt("display-rotate", config.displayRotate))
+                return std::nullopt;
+            break;
         case OPT_VERSION:
             config.command = "version";
             return config;
@@ -448,6 +454,11 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         error = "--display-lines must be between 1 and 16";
         return std::nullopt;
     }
+    if (config.displayRotate != 0 && config.displayRotate != 90 && config.displayRotate != 180 &&
+        config.displayRotate != 270) {
+        error = "--display-rotate must be 0, 90, 180, or 270";
+        return std::nullopt;
+    }
     if (config.expect && config.command != "decode") {
         error = "--expect is only valid with decode";
         return std::nullopt;
@@ -491,5 +502,5 @@ std::string usageText()
            "File source (scan/trigger/capture, replaces the camera): --source IMG_OR_DIR (repeatable)\n"
            "  --repeat N (passes over the images, 0=forever). decode: compares to <name>.txt\n"
            "  sidecars with --expect (sidecar text NONE means no barcode expected).\n"
-           "Display (scan/trigger/capture): --display auto|/dev/fbN --display-lines N\n";
+           "Display (scan/trigger/capture): --display auto|/dev/fbN --display-lines N --display-rotate 0|90|180|270\n";
 }

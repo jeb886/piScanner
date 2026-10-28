@@ -12,6 +12,9 @@ public:
     virtual ~ResultSink() = default;
     virtual void onResult(const ScanResult& result) = 0;
     virtual void onTimeout(std::uint64_t timestampUs) = 0;
+    // Aux input (e.g. touchscreen capture button): a copy of the latest
+    // camera frame is delivered; sinks that don't care ignore it.
+    virtual void onAux(const Frame& frame) { (void)frame; }
 };
 
 class TextSink final : public ResultSink {
@@ -48,6 +51,8 @@ public:
 
 private:
     int fd_ = -1;
+    std::string device_;
+    bool disconnected_ = false;
     std::mutex mutex_;
 };
 
@@ -58,6 +63,7 @@ public:
     explicit LogSink(ResultSink& inner) : inner_(inner) {}
     void onResult(const ScanResult& result) override;
     void onTimeout(std::uint64_t timestampUs) override;
+    void onAux(const Frame& frame) override { inner_.onAux(frame); }
 
 private:
     ResultSink& inner_;
@@ -71,6 +77,7 @@ public:
     BeepSink(ResultSink& inner, PwmBeeper& beeper) : inner_(inner), beeper_(beeper) {}
     void onResult(const ScanResult& result) override;
     void onTimeout(std::uint64_t timestampUs) override;
+    void onAux(const Frame& frame) override { inner_.onAux(frame); }
 
 private:
     ResultSink& inner_;

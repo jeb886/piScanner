@@ -56,10 +56,12 @@ struct Scanner::Impl {
     bool armed = false;
     std::uint64_t pressTimestampUs = 0;
     std::uint64_t sessionStartedUs = 0;
+    int armedFrames = 0; // frames actually submitted for decode this session
     Dedupe dedupe;
     std::atomic<std::uint64_t> captured{0};
     std::atomic<std::uint64_t> processed{0};
     std::atomic<std::uint64_t> dropped{0};
+    std::atomic<bool> captureRequested{false}; // Aux input wants the next frame
     std::atomic<double> decodeTotalMs{0};
     std::atomic<double> decodeMaxMs{0};
 
@@ -117,6 +119,8 @@ struct Scanner::Impl {
                 if (!camera.dequeue(frame, index, 100))
                     continue;
                 captured.fetch_add(1);
+                if (captureRequested.exchange(false))
+                    sink.onAux(frame);
                 std::lock_guard lock(mutex);
                 if (stop.load() || !armed) {
                     camera.requeue(index);
@@ -156,6 +160,8 @@ struct Scanner::Impl {
                 work = *slots[workerIndex].work;
                 slots[workerIndex].work.reset();
                 decodeFrame = armed && (config.command != "trigger" || work.frame.timestampUs >= pressTimestampUs);
+                if (decodeFrame)
+                    ++armedFrames;
             }
 
             std::vector<ScanResult> results;
@@ -273,8 +279,11 @@ struct Scanner::Impl {
                             std::lock_guard lock(mutex);
                             if (event.type == TriggerEventType::Pressed) {
                                 armed = true;
+                                armedFrames = 0;
                                 pressTimestampUs = event.timestampUs;
                                 sessionStartedUs = event.timestampUs;
+                            } else if (event.type == TriggerEventType::Aux) {
+                                captureRequested = true;
                             } else if (config.triggerMode == "level") {
                                 armed = false;
                                 discardPendingLocked();
@@ -293,6 +302,7 @@ struct Scanner::Impl {
                         now - sessionStartedUs >= static_cast<std::uint64_t>(config.scanTimeoutMs) * 1000) {
                         armed = false;
                         expiredTimestamp = now;
+                        logLine("scan window armed_frames=" + std::to_string(armedFrames));
                         discardPendingLocked();
                     }
                 }

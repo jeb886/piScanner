@@ -9,10 +9,12 @@
 #include "Output.h"
 #include "Scanner.h"
 #include "Trigger.h"
+#include "TouchTrigger.h"
 #include "V4l2Camera.h"
 
 #include <atomic>
 #include <chrono>
+#include <linux/input.h>
 #include <mutex>
 #include <set>
 #include <sstream>
@@ -247,14 +249,17 @@ void testArguments()
     CHECK(parse({"piscanner", "capture", "shot.png", "--warmup", "0"}, error).has_value());
     CHECK(parse({"piscanner", "capture", "shot.png", "--source", "some/dir"}, error).has_value());
     CHECK(!parse({"piscanner", "bench", "f.pgm", "--source", "some/dir"}, error).has_value());
-    auto disp = parse({"piscanner", "scan", "--display", "auto", "--display-lines", "3"}, error);
+    auto disp = parse({"piscanner", "scan", "--display", "auto", "--display-lines", "3",
+                       "--display-rotate", "270"}, error);
     CHECK(disp.has_value());
     if (disp) {
         CHECK(disp->displayDevice == "auto");
         CHECK(disp->displayLines == 3);
+        CHECK(disp->displayRotate == 270);
     }
     CHECK(!parse({"piscanner", "decode", "x.png", "--display", "auto"}, error).has_value());
     CHECK(!parse({"piscanner", "scan", "--display-lines", "0"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--display-rotate", "45"}, error).has_value());
 }
 
 // Every character of a representative barcode charset must map to a keycode,
@@ -318,6 +323,105 @@ void testDisplayRender()
         }
         CHECK(distinct >= 3);
     }
+}
+
+// TouchDecoder: evdev batch ordering variants must all produce a press
+// inside the button rect (and a release on lift). Raw range 0..4095 with
+// the panel's inverted Y axis.
+void testTouchDecoder()
+{
+    // Scan rect covers the bottom quarter; capture rect sits out of range
+    // (never hit) unless a test supplies one.
+    const auto mk = [] {
+        return TouchDecoder(0.0f, 0.75f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 4095, 0, 4095);
+    };
+
+    {
+        auto d = mk();
+        // Normal order: ABS first, then BTN_TOUCH.
+        CHECK(d.feed(EV_ABS, ABS_X, 2000) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 600) == std::nullopt); // raw 600 -> ny ~0.85 (inverted)
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == TriggerEventType::Pressed);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == TriggerEventType::Released);
+    }
+    {
+        // ADS7846 order: BTN_TOUCH before the ABS sample. Top-right
+        // rect so stale 0,0 (bottom-left after Y invert) stays outside.
+        TouchDecoder d(0.5f, 0.0f, 1.0f, 0.25f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 4095, 0, 4095);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt); // coords still stale
+        CHECK(d.feed(EV_ABS, ABS_X, 3500) == std::nullopt);  // y still stale bottom
+        CHECK(d.feed(EV_ABS, ABS_Y, 3500) == TriggerEventType::Pressed); // ny~0.15 -> inside
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == TriggerEventType::Released);
+    }
+    {
+        auto d = mk();
+        // Press outside the rect (top of screen = low ny after invert) -> nothing.
+        CHECK(d.feed(EV_ABS, ABS_X, 2000) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 3800) == std::nullopt); // ny ~0.07
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == std::nullopt);
+    }
+    {
+        // Degenerate: zero-range axis never fires.
+        TouchDecoder bad(0.0f, 0.75f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 0, 0, 4095);
+        CHECK(bad.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
+    }
+    {
+        // Capture rect (top-right band) emits Aux, not Pressed.
+        TouchDecoder d(0.0f, 0.75f, 1.0f, 1.0f, 0.5f, 0.0f, 1.0f, 0.25f, 0, 4095, 0, 4095);
+        CHECK(d.feed(EV_ABS, ABS_X, 3500) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 3500) == std::nullopt); // ny~0.15, nx~0.85 -> capture rect
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == TriggerEventType::Aux);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == std::nullopt); // Aux has no release
+    }
+    {
+        // Photo mode: any tap becomes Aux (the exit tap).
+        std::atomic<int> mode{1};
+        TouchDecoder d(0.0f, 0.75f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 4095, 0, 4095, 0, &mode);
+        CHECK(d.feed(EV_ABS, ABS_X, 2000) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 2000) == std::nullopt); // dead centre
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == TriggerEventType::Aux);
+        // Back in UI mode the same coordinates do nothing.
+        mode = 0;
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 2000) == std::nullopt);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
+    }
+}
+
+// MultiTrigger: events from all wrapped sources must be delivered.
+namespace {
+class PulseTrigger final : public Trigger {
+public:
+    explicit PulseTrigger(int pulses) : pulses_(pulses) {}
+    bool wait(int timeoutMs, TriggerEvent& event) override
+    {
+        (void)timeoutMs;
+        if (sent_ >= pulses_)
+            return false;
+        ++sent_;
+        event.type = TriggerEventType::Pressed;
+        event.timestampUs = static_cast<std::uint64_t>(sent_);
+        return true;
+    }
+
+private:
+    int pulses_;
+    int sent_ = 0;
+};
+}
+
+void testMultiTrigger()
+{
+    std::vector<std::unique_ptr<Trigger>> sources;
+    sources.push_back(std::make_unique<PulseTrigger>(1));
+    sources.push_back(std::make_unique<PulseTrigger>(1));
+    MultiTrigger multi(std::move(sources));
+    TriggerEvent event;
+    int got = 0;
+    for (int i = 0; i < 20 && got < 2; ++i)
+        got += multi.wait(200, event) ? 1 : 0;
+    CHECK(got == 2);
 }
 
 void testJson()
@@ -682,6 +786,8 @@ int main(int argc, char* argv[])
     testHidKeys();
     testPixelFormatChoice();
     testDisplayRender();
+    testTouchDecoder();
+    testMultiTrigger();
     testJson();
     if (argc == 4) {
         g_dataDir = argv[3];

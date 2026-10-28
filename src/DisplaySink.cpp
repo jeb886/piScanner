@@ -186,31 +186,39 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
     if (!state.last) {
         drawText(surface, 6, y + 20, "waiting for a scan...", kDim, 2);
     } else {
-        drawText(surface, 6, y, state.last->format, kGood, 3);
-        y += 34;
-        const int cols = textCols(surface, 2);
+        // Decode data first (white, wrapped), then "542ms | EAN-8" green.
+        const int cols = textCols(surface, 3);
         std::string rest = state.last->text;
-        while (!rest.empty() && y < buttonTop - 60) {
+        while (!rest.empty() && y < buttonTop - 120) {
             const std::string row = clipped(rest, cols);
-            drawText(surface, 6, y, row, kText, 2);
-            y += 24; // a scale-2 glyph row is ~20px tall
+            drawText(surface, 6, y, row, kText, 3);
+            y += 36; // a scale-3 glyph row is ~30px tall
             rest = rest.size() > static_cast<std::size_t>(cols) ? rest.substr(static_cast<std::size_t>(cols)) : "";
         }
-        std::ostringstream ms;
-        ms << static_cast<long>(state.last->readyMs + 0.5) << "ms";
-        drawText(surface, 6, y + 2, ms.str(), kDim, 2);
-        y += 24;
+        std::ostringstream status;
+        status << static_cast<long>(state.last->readyMs + 0.5) << "ms | " << state.last->format;
+        drawText(surface, 6, y + 2, status.str(), kGood, 3);
+        y += 40;
 
-        y = buttonTop - 8 - static_cast<int>(state.history.size()) * 16;
-        y = std::max(y, 120);
+        if (state.stats.count > 0) {
+            std::ostringstream stats;
+            stats << "avg " << static_cast<long>(state.stats.sumMs / static_cast<double>(state.stats.count) + 0.5)
+                  << "ms  min " << static_cast<long>(state.stats.minMs + 0.5)
+                  << "  max " << static_cast<long>(state.stats.maxMs + 0.5);
+            drawText(surface, 6, y, stats.str(), kDim, 2);
+            y += 24;
+        }
+
+        y = buttonTop - 8 - static_cast<int>(state.history.size()) * 22;
+        y = std::max(y, 140);
         for (const auto& entry : state.history) {
             if (y > buttonTop - 16)
                 break;
-            const int hcols = textCols(surface, 1);
+            const int hcols = textCols(surface, 2);
             std::ostringstream row;
             row << entry.format << " " << static_cast<long>(entry.readyMs + 0.5) << "ms  " << entry.text;
-            drawText(surface, 6, y, clipped(row.str(), hcols), kDim, 1);
-            y += 16;
+            drawText(surface, 6, y, clipped(row.str(), hcols), kDim, 2);
+            y += 22;
         }
     }
 
@@ -219,10 +227,20 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
     const int labelW = static_cast<int>(label.size()) * 8 * 3;
     drawText(surface, (surface.width - labelW) / 2, buttonTop + (surface.height - buttonTop - 24) / 2,
              label, kBg, 3);
+
+    // Red square capture button on the right, same height as SCAN.
+    const int cx0 = static_cast<int>(kCaptureButton.x0 * surface.width);
+    const int cy0 = static_cast<int>(kCaptureButton.y0 * surface.height);
+    const int cw = static_cast<int>((kCaptureButton.x1 - kCaptureButton.x0) * surface.width);
+    const int ch = static_cast<int>((kCaptureButton.y1 - kCaptureButton.y0) * surface.height);
+    fillRect(surface, cx0 + 2, cy0 + 2, cw - 4, ch - 4, rgb565(0xe0, 0x30, 0x30));
 }
 
-DisplaySink::DisplaySink(ResultSink& inner, const Config& config) : inner_(inner)
+DisplaySink::DisplaySink(ResultSink& inner, const Config& config, std::shared_ptr<std::atomic<int>> mode)
+    : inner_(inner), rotation_(config.displayRotate), mode_(std::move(mode))
 {
+    if (!mode_)
+        mode_ = std::make_shared<std::atomic<int>>(0);
     state_.historyLimit = static_cast<std::size_t>(std::max(1, config.displayLines));
     open(config);
 }
@@ -262,13 +280,23 @@ void DisplaySink::open(const Config& config)
         return;
     }
 
-    surface_.width = static_cast<int>(var.xres);
-    surface_.height = static_cast<int>(var.yres);
-    surface_.strideBytes = static_cast<int>(fix.line_length);
+    fbWidth_ = static_cast<int>(var.xres);
+    fbHeight_ = static_cast<int>(var.yres);
+    fbStride_ = static_cast<int>(fix.line_length);
     surface_.bitsPerPixel = static_cast<int>(var.bits_per_pixel);
+    // Rotated UIs render into a portrait buffer; paint() maps it into the
+    // landscape framebuffer.
+    if (rotation_ == 90 || rotation_ == 270) {
+        surface_.width = fbHeight_;
+        surface_.height = fbWidth_;
+    } else {
+        surface_.width = fbWidth_;
+        surface_.height = fbHeight_;
+    }
+    surface_.strideBytes = surface_.width * (surface_.bitsPerPixel / 8);
     fbBytes_ = static_cast<std::size_t>(fix.smem_len);
     if (fbBytes_ == 0)
-        fbBytes_ = static_cast<std::size_t>(surface_.strideBytes) * surface_.height;
+        fbBytes_ = static_cast<std::size_t>(fbStride_) * fbHeight_;
 
     fb_ = static_cast<std::uint8_t*>(mmap(nullptr, fbBytes_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0));
     if (fb_ == MAP_FAILED) {
@@ -281,8 +309,8 @@ void DisplaySink::open(const Config& config)
 
     backing_.resize(static_cast<std::size_t>(surface_.strideBytes) * surface_.height);
     surface_.pixels = backing_.data();
-    logLine("display " + path + " " + std::to_string(surface_.width) + "x" +
-            std::to_string(surface_.height) + " " + std::to_string(surface_.bitsPerPixel) + "bpp");
+    logLine("display " + path + " " + std::to_string(fbWidth_) + "x" + std::to_string(fbHeight_) +
+            " " + std::to_string(surface_.bitsPerPixel) + "bpp rot=" + std::to_string(rotation_));
     paint();
 }
 
@@ -300,10 +328,43 @@ void DisplaySink::paint()
 {
     if (surface_.pixels == nullptr)
         return;
-    renderDisplayFrame(surface_, state_);
-    const auto rows = std::min<std::size_t>(fbBytes_ / static_cast<std::size_t>(std::max(1, surface_.strideBytes)),
-                                            backing_.size() / static_cast<std::size_t>(std::max(1, surface_.strideBytes)));
-    std::memcpy(fb_, backing_.data(), rows * static_cast<std::size_t>(surface_.strideBytes));
+    // Photo mode: blit the captured image (already converted to surface
+    // format at render size) instead of the scanner UI.
+    if (mode_ && mode_->load() == 1 && !photo_.empty()) {
+        const auto copyBytes = std::min(photo_.size(), backing_.size());
+        std::memcpy(backing_.data(), photo_.data(), copyBytes);
+    } else {
+        renderDisplayFrame(surface_, state_);
+    }
+    const int bpp = surface_.bitsPerPixel / 8;
+    if (rotation_ == 0) {
+        const auto rows = std::min<std::size_t>(fbBytes_ / static_cast<std::size_t>(std::max(1, fbStride_)),
+                                                backing_.size() / static_cast<std::size_t>(std::max(1, surface_.strideBytes)));
+        for (std::size_t y = 0; y < rows; ++y)
+            std::memcpy(fb_ + y * fbStride_, backing_.data() + y * surface_.strideBytes,
+                        static_cast<std::size_t>(surface_.width) * bpp);
+        return;
+    }
+    // Rotated blit: portrait surface -> landscape framebuffer.
+    for (int y = 0; y < fbHeight_; ++y) {
+        for (int x = 0; x < fbWidth_; ++x) {
+            int sx, sy;
+            if (rotation_ == 270) {
+                sx = surface_.width - 1 - y;
+                sy = x;
+            } else if (rotation_ == 90) {
+                sx = y;
+                sy = surface_.height - 1 - x;
+            } else { // 180
+                sx = surface_.width - 1 - x;
+                sy = surface_.height - 1 - y;
+            }
+            auto* dst = fb_ + static_cast<std::size_t>(y) * fbStride_ + static_cast<std::size_t>(x) * bpp;
+            const auto* src = backing_.data() + static_cast<std::size_t>(sy) * surface_.strideBytes +
+                              static_cast<std::size_t>(sx) * bpp;
+            std::memcpy(dst, src, bpp);
+        }
+    }
 }
 
 void DisplaySink::onResult(const ScanResult& result)
@@ -316,6 +377,7 @@ void DisplaySink::onResult(const ScanResult& result)
     const double readyMs = now > baseUs ? static_cast<double>(now - baseUs) / 1000.0 : 0.0;
     std::lock_guard lock(mutex_);
     DisplayEntry entry{result.format, result.text, readyMs};
+    state_.stats.add(readyMs);
     if (state_.last)
         state_.history.push_front(*state_.last);
     state_.last = entry;
@@ -332,5 +394,77 @@ void DisplaySink::onTimeout(std::uint64_t timestampUs)
     std::lock_guard lock(mutex_);
     state_.timedOut = true;
     ++state_.timeouts;
+    paint();
+}
+
+namespace {
+
+// Frame -> surface-sized pixel buffer. Supports YUYV and GREY (the
+// service uses YUYV); MJPEG and empty frames produce an empty buffer.
+std::vector<std::uint8_t> frameToSurface(const Frame& frame, const DisplaySurface& surface)
+{
+    if (frame.data == nullptr || frame.width <= 0 || frame.height <= 0 ||
+        surface.width <= 0 || surface.height <= 0)
+        return {};
+    if (frame.fmt == PixelFormat::MJPEG)
+        return {}; // capture path only handles raw formats
+    const int bpp = surface.bitsPerPixel / 8;
+    std::vector<std::uint8_t> out(static_cast<std::size_t>(surface.width) * surface.height * bpp, 0);
+    for (int y = 0; y < surface.height; ++y) {
+        for (int x = 0; x < surface.width; ++x) {
+            // Rotate the image -90 (CCW): a landscape camera frame fills a
+            // portrait buffer sideways-landscape (image top -> left edge).
+            const int sx = std::min((surface.height - 1 - y) * frame.width / surface.height, frame.width - 1);
+            const int sy = std::min(x * frame.height / surface.width, frame.height - 1);
+            std::uint8_t r = 0, g = 0, b = 0;
+            if (frame.fmt == PixelFormat::GREY) {
+                const std::uint8_t v = frame.data[static_cast<std::size_t>(sy) * frame.stride + sx];
+                r = g = b = v;
+            } else { // YUYV pairs
+                const std::size_t o = static_cast<std::size_t>(sy) * frame.stride + static_cast<std::size_t>(sx & ~1) * 2;
+                const int yv = frame.data[o + (sx & 1) * 2];
+                const int u = frame.data[o + 1] - 128;
+                const int vv = frame.data[o + 3] - 128;
+                const int cr = (yv * 256 + 359 * vv) >> 8;
+                const int cg = (yv * 256 - 88 * u - 183 * vv) >> 8;
+                const int cb = (yv * 256 + 454 * u) >> 8;
+                r = static_cast<std::uint8_t>(std::clamp(cr, 0, 255));
+                g = static_cast<std::uint8_t>(std::clamp(cg, 0, 255));
+                b = static_cast<std::uint8_t>(std::clamp(cb, 0, 255));
+            }
+            auto* dst = out.data() + (static_cast<std::size_t>(y) * surface.width + x) * bpp;
+            if (bpp == 2) {
+                const std::uint16_t p = rgb565(r, g, b);
+                dst[0] = static_cast<std::uint8_t>(p & 0xff);
+                dst[1] = static_cast<std::uint8_t>(p >> 8);
+            } else {
+                dst[0] = b;
+                dst[1] = g;
+                dst[2] = r;
+                dst[3] = 0xff;
+            }
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+void DisplaySink::onAux(const Frame& frame)
+{
+    std::lock_guard lock(mutex_);
+    if (mode_->load() == 1) {
+        // Exit tap: back to the scanner UI.
+        mode_->store(0);
+        paint();
+        return;
+    }
+    photo_ = frameToSurface(frame, surface_);
+    if (photo_.empty()) {
+        logLine("capture unsupported frame format");
+        return;
+    }
+    mode_->store(1);
+    logLine("capture shown " + std::to_string(frame.width) + "x" + std::to_string(frame.height));
     paint();
 }

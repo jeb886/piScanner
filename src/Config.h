@@ -59,6 +59,7 @@ struct Config {
     // SPI panel output (fbdev path or "auto"); empty = no display.
     std::string displayDevice;
     int displayLines = 4;     // history rows shown under the latest result
+    int displayRotate = 0;    // UI rotation in degrees: 0, 90, 180, 270
     bool expect = false;      // decode: compare results to .txt sidecars
     std::vector<std::string> decodeInputs; // decode: positional files/dirs
 };

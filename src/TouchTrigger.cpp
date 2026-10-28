@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <fcntl.h>
 #include <poll.h>
@@ -21,19 +22,12 @@ std::uint64_t nowUs()
     return static_cast<std::uint64_t>(ts.tv_sec) * 1000000 + ts.tv_nsec / 1000;
 }
 
-int absMax(int fd, int axis)
+int absInfo(int fd, int axis, bool max)
 {
     input_absinfo info{};
     if (ioctl(fd, EVIOCGABS(axis), &info) < 0)
         return -1;
-    return info.maximum;
-}
-int absMin(int fd, int axis)
-{
-    input_absinfo info{};
-    if (ioctl(fd, EVIOCGABS(axis), &info) < 0)
-        return -1;
-    return info.minimum;
+    return max ? info.maximum : info.minimum;
 }
 
 } // namespace
@@ -52,12 +46,17 @@ MultiTrigger::MultiTrigger(std::vector<std::unique_ptr<Trigger>> sources)
                         return;
                 }
                 TriggerEvent event;
-                if (t->wait(50, event)) {
-                    {
-                        std::lock_guard<std::mutex> lock(mutex_);
-                        queue_.push_back(event);
+                try {
+                    if (t->wait(50, event)) {
+                        {
+                            std::lock_guard<std::mutex> lock(mutex_);
+                            queue_.push_back(event);
+                        }
+                        cv_.notify_one();
                     }
-                    cv_.notify_one();
+                } catch (const std::exception& e) {
+                    logLine(std::string("trigger worker error ") + e.what());
+                    return;
                 }
             }
         });
@@ -85,6 +84,97 @@ bool MultiTrigger::wait(int timeoutMs, TriggerEvent& event)
     return true;
 }
 
+TouchDecoder::TouchDecoder(float x0, float y0, float x1, float y1,
+                           float cx0, float cy0, float cx1, float cy1,
+                           int xmin, int xmax, int ymin, int ymax,
+                           int rotation, const std::atomic<int>* mode)
+    : rotation_(rotation), rx0_(x0), ry0_(y0), rx1_(x1), ry1_(y1),
+      cx0_(cx0), cy0_(cy0), cx1_(cx1), cy1_(cy1),
+      axMin_(xmin), axRange_(xmax - xmin), ayMin_(ymin), ayRange_(ymax - ymin), mode_(mode)
+{
+}
+
+bool TouchDecoder::inside(float x0, float y0, float x1, float y1) const
+{
+    if (axRange_ <= 0 || ayRange_ <= 0)
+        return false;
+    const float rx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
+    const float ry = static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
+    // The panel reports Y inverted relative to the framebuffer (bottom of
+    // screen reads as low raw Y); the transforms below fold that flip and
+    // the UI rotation into display-normalized coordinates.
+    float nx = 0, ny = 0;
+    switch (rotation_) {
+    case 90:
+        nx = 1.0f - ry;
+        ny = 1.0f - rx;
+        break;
+    case 270:
+        nx = ry;
+        ny = rx;
+        break;
+    case 180:
+        nx = 1.0f - rx;
+        ny = ry;
+        break;
+    default:
+        nx = rx;
+        ny = 1.0f - ry;
+        break;
+    }
+    return nx >= x0 && nx <= x1 && ny >= y0 && ny <= y1;
+}
+
+std::string TouchDecoder::lastRaw() const
+{
+    return std::to_string(curX_) + "," + std::to_string(curY_);
+}
+
+std::optional<TriggerEventType> TouchDecoder::feed(int type, int code, int value)
+{
+    const auto decide = [this]() -> std::optional<TriggerEventType> {
+        // In photo mode any tap exits back to the UI.
+        if (mode_ != nullptr && mode_->load() == 1)
+            return TriggerEventType::Aux;
+        if (inside(cx0_, cy0_, cx1_, cy1_)) {
+            auxSent_ = true;
+            return TriggerEventType::Aux;
+        }
+        if (inside(rx0_, ry0_, rx1_, ry1_)) {
+            pressSent_ = true;
+            return TriggerEventType::Pressed;
+        }
+        return std::nullopt;
+    };
+    if (type == EV_ABS && (code == ABS_X || code == ABS_Y)) {
+        if (code == ABS_X)
+            curX_ = value;
+        else
+            curY_ = value;
+        // Some drivers send ABS after BTN_TOUCH; a touch that slides
+        // into a button while still held should also fire.
+        if (down_ && !pressSent_ && !auxSent_)
+            return decide();
+    } else if (type == EV_KEY && code == BTN_TOUCH) {
+        if (value == 1) {
+            down_ = true;
+            pressSent_ = false;
+            auxSent_ = false;
+            logLine("touch raw=" + lastRaw());
+            return decide();
+        }
+        if (down_) {
+            down_ = false;
+            if (pressSent_) {
+                pressSent_ = false;
+                return TriggerEventType::Released;
+            }
+            auxSent_ = false;
+        }
+    }
+    return std::nullopt;
+}
+
 std::string findTouchDevice()
 {
     std::error_code error;
@@ -103,18 +193,18 @@ std::string findTouchDevice()
         const bool hasX = absBits & (1UL << ABS_X);
         const bool hasY = absBits & (1UL << ABS_Y);
         ::close(fd);
-        // Resistive panels report ABS_X/ABS_Y plus a name containing the
-        // controller or "touch"; accept either signal.
-        const std::string lower = std::string(devName);
+        const std::string probe = devName;
         if (hasX && hasY &&
-            (lower.find("7846") != std::string::npos || lower.find("ouch") != std::string::npos ||
-             lower.find("xpt") != std::string::npos))
+            (probe.find("7846") != std::string::npos || probe.find("ouch") != std::string::npos ||
+             probe.find("xpt") != std::string::npos))
             return path;
     }
     return {};
 }
 
-std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1, float y1)
+std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1, float y1,
+                                                float cx0, float cy0, float cx1, float cy1,
+                                                int rotation, const std::atomic<int>* mode)
 {
     const std::string path = findTouchDevice();
     if (path.empty())
@@ -122,22 +212,18 @@ std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1,
     int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0)
         return nullptr;
-    const int xmin = absMin(fd, ABS_X), xmax = absMax(fd, ABS_X);
-    const int ymin = absMin(fd, ABS_Y), ymax = absMax(fd, ABS_Y);
+    const int xmin = absInfo(fd, ABS_X, false), xmax = absInfo(fd, ABS_X, true);
+    const int ymin = absInfo(fd, ABS_Y, false), ymax = absInfo(fd, ABS_Y, true);
     if (xmax <= xmin || ymax <= ymin) {
         ::close(fd);
         return nullptr;
     }
     logLine("touch " + path);
-    return std::unique_ptr<TouchTrigger>(new TouchTrigger(fd, x0, y0, x1, y1, xmin, xmax, ymin, ymax));
+    return std::unique_ptr<TouchTrigger>(
+        new TouchTrigger(fd, TouchDecoder(x0, y0, x1, y1, cx0, cy0, cx1, cy1, xmin, xmax, ymin, ymax, rotation, mode)));
 }
 
-TouchTrigger::TouchTrigger(int fd, float x0, float y0, float x1, float y1,
-                           int xmin, int xmax, int ymin, int ymax)
-    : fd_(fd), rx0_(x0), ry0_(y0), rx1_(x1), ry1_(y1),
-      axMin_(xmin), axRange_(xmax - xmin), ayMin_(ymin), ayRange_(ymax - ymin)
-{
-}
+TouchTrigger::TouchTrigger(int fd, TouchDecoder decoder) : fd_(fd), decoder_(decoder) {}
 
 TouchTrigger::~TouchTrigger()
 {
@@ -156,30 +242,11 @@ bool TouchTrigger::wait(int timeoutMs, TriggerEvent& event)
         return false;
     for (std::size_t i = 0; i + sizeof(input_event) <= static_cast<std::size_t>(got); i += sizeof(input_event)) {
         const input_event& e = *reinterpret_cast<const input_event*>(reinterpret_cast<const char*>(events) + i);
-        if (e.type == EV_ABS && e.code == ABS_X)
-            curX_ = e.value;
-        else if (e.type == EV_ABS && e.code == ABS_Y)
-            curY_ = e.value;
-        else if (e.type == EV_KEY && e.code == BTN_TOUCH) {
-            if (e.value == 1) {
-                const float nx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
-                const float ny = static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
-                down_ = true;
-                inside_ = nx >= rx0_ && nx <= rx1_ && ny >= ry0_ && ny <= ry1_;
-                if (inside_) {
-                    event.type = TriggerEventType::Pressed;
-                    event.timestampUs = nowUs();
-                    return true;
-                }
-            } else if (down_) {
-                down_ = false;
-                if (inside_) {
-                    inside_ = false;
-                    event.type = TriggerEventType::Released;
-                    event.timestampUs = nowUs();
-                    return true;
-                }
-            }
+        const auto fired = decoder_.feed(e.type, e.code, e.value);
+        if (fired) {
+            event.type = *fired;
+            event.timestampUs = nowUs();
+            return true;
         }
     }
     return false;

@@ -94,7 +94,7 @@ void typeChar(int fd, char ch)
 
 }
 
-HidSink::HidSink(const std::string& device)
+HidSink::HidSink(const std::string& device) : device_(device)
 {
     // /dev/hidg0 appears only after the gadget service enumerates it; the
     // piScanner unit can race it on boot, so wait a while before failing.
@@ -165,9 +165,27 @@ void BeepSink::onTimeout(std::uint64_t timestampUs)
 void HidSink::onResult(const ScanResult& result)
 {
     std::lock_guard lock(mutex_);
-    for (const char ch : result.text)
-        typeChar(fd_, ch);
-    typeChar(fd_, '\n');
+    if (fd_ < 0) {
+        // The gadget endpoint was torn down (host unplugged/suspended);
+        // retry the open once per result instead of dying.
+        fd_ = open(device_.c_str(), O_WRONLY | O_CLOEXEC);
+        if (fd_ < 0)
+            return;
+        disconnected_ = false;
+    }
+    try {
+        for (const char ch : result.text)
+            typeChar(fd_, ch);
+        typeChar(fd_, '\n');
+    } catch (const std::system_error&) {
+        close(fd_);
+        fd_ = -1;
+        if (!disconnected_) {
+            disconnected_ = true;
+            logLine("hid write failed; host offline, dropping keystrokes");
+        }
+        std::cerr << "warning: HID gadget write failed (host offline?); result dropped\n";
+    }
 }
 
 void HidSink::onTimeout(std::uint64_t)
