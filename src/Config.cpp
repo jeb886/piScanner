@@ -101,6 +101,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         OPT_EXPECT,
         OPT_LOG_FILE,
         OPT_WARMUP,
+        OPT_DISPLAY,
+        OPT_DISPLAY_LINES,
         OPT_VERSION
     };
     static const option options[] = {
@@ -146,6 +148,8 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
         {"expect", no_argument, nullptr, OPT_EXPECT},
         {"log-file", required_argument, nullptr, OPT_LOG_FILE},
         {"warmup", required_argument, nullptr, OPT_WARMUP},
+        {"display", required_argument, nullptr, OPT_DISPLAY},
+        {"display-lines", required_argument, nullptr, OPT_DISPLAY_LINES},
         {"help", no_argument, nullptr, 'h'},
         {"version", no_argument, nullptr, OPT_VERSION},
         {nullptr, 0, nullptr, 0},
@@ -326,6 +330,13 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
             if (!assignInt("warmup", config.warmup))
                 return std::nullopt;
             break;
+        case OPT_DISPLAY:
+            config.displayDevice = optarg;
+            break;
+        case OPT_DISPLAY_LINES:
+            if (!assignInt("display-lines", config.displayLines))
+                return std::nullopt;
+            break;
         case OPT_VERSION:
             config.command = "version";
             return config;
@@ -395,7 +406,7 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
     }
     if (config.beeperLine >= 0 && config.beeperLine != 12 && config.beeperLine != 13 && config.beeperLine != 18 &&
         config.beeperLine != 19) {
-        error = "--beeper-line must be a hardware-PWM GPIO (12, 13, 18 or 19); the default is 18 (header pin 12)";
+        error = "--beeper-line must be a hardware-PWM GPIO (12, 13, 18 or 19); the service uses 12 (header pin 32)";
         return std::nullopt;
     }
     if (config.beeperPwmChannel < -1 || config.beeperPwmChannel > 3) {
@@ -426,6 +437,15 @@ std::optional<Config> parseArgs(int argc, char* argv[], std::string& error)
     if (!config.source.empty() && config.command != "scan" && config.command != "trigger" &&
         config.command != "capture") {
         error = "--source is only valid with scan, trigger, or capture";
+        return std::nullopt;
+    }
+    if (!config.displayDevice.empty() && config.command != "scan" && config.command != "trigger" &&
+        config.command != "capture") {
+        error = "--display is only valid with scan, trigger, or capture";
+        return std::nullopt;
+    }
+    if (config.displayLines <= 0 || config.displayLines > 16) {
+        error = "--display-lines must be between 1 and 16";
         return std::nullopt;
     }
     if (config.expect && config.command != "decode") {
@@ -470,5 +490,6 @@ std::string usageText()
            "  --debounce-us N --active-low|--no-active-low --trigger-mode edge|level --scan-timeout-ms N\n"
            "File source (scan/trigger/capture, replaces the camera): --source IMG_OR_DIR (repeatable)\n"
            "  --repeat N (passes over the images, 0=forever). decode: compares to <name>.txt\n"
-           "  sidecars with --expect (sidecar text NONE means no barcode expected).\n";
+           "  sidecars with --expect (sidecar text NONE means no barcode expected).\n"
+           "Display (scan/trigger/capture): --display auto|/dev/fbN --display-lines N\n";
 }

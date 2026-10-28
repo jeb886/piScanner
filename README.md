@@ -7,8 +7,8 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 ## Hardware
 
 - Raspberry Pi 5 and a UVC-compatible USB webcam (tested target: Logitech Brio, USB 3).
-- For the default trigger, connect a momentary switch between BCM GPIO17 (header pin 11) and GND (pin 9). The internal pull-up is enabled by default.
-- For the beeper, connect a **passive** buzzer with `+` on BCM GPIO18 (header pin 12) and `-` on GND (pin 14). A small piezo can connect directly; drive a magnetic/coil buzzer through an NPN transistor.
+- For the default trigger, connect a momentary switch between BCM GPIO16 (header pin 36) and GND (pin 34). The internal pull-up is enabled by default.
+- For the beeper, connect a **passive** buzzer with `+` on BCM GPIO12 (header pin 32) and `-` on GND (pin 30). A small piezo can connect directly; drive a magnetic/coil buzzer through an NPN transistor.
 - GPIO is **3.3 V only**. Never connect a 5 V signal. Use an optocoupler for 12/24 V industrial triggers.
 - Add the user to the `video` and `gpio` groups for device access.
 
@@ -16,16 +16,18 @@ Target OS: **Raspberry Pi OS Lite (Debian 13 Trixie, 64-bit)** on a Pi 5.
 
 | Connect | Pi header pin | Signal |
 |---|---|---|
-| Trigger switch, leg 1 | pin 11 | GPIO17 |
-| Trigger switch, leg 2 | pin 9 | GND |
-| Beeper `+` (red) | pin 12 | GPIO18 |
-| Beeper `-` (black) | pin 14 | GND |
+| Trigger switch, leg 1 | pin 36 | GPIO16 |
+| Trigger switch, leg 2 | pin 34 | GND |
+| Beeper `+` (red) | pin 32 | GPIO12 |
+| Beeper `-` (black) | pin 30 | GND |
 | Logitech Brio | blue USB 3 port | — |
 | Host PC | USB-C port | power + keyboard data |
 
-Pin 1 is the square pad at the end of the header farthest from the USB/Ethernet ports; odd pins are on the inner row and even pins on the board-edge row. Pins 12 and 14 are adjacent on the board-edge row, so a 2-pin Dupont connector fits the beeper. Use a small piezo directly; a magnetic/coil passive buzzer needs an NPN transistor.
+Pin 1 is the square pad at the end of the header farthest from the USB/Ethernet ports; odd pins are on the inner row and even pins on the board-edge row. Pins 30 and 32 are adjacent on the board-edge row, so a 2-pin Dupont connector fits the beeper. Use a small piezo directly; a magnetic/coil passive buzzer needs an NPN transistor.
 
-The passive beeper plays a startup chirp at 2471 Hz (low), 2752 Hz (medium), and 3056 Hz (high), each for `--beeper-ms` milliseconds. Each successful decode plays one medium beep; another decode while it is sounding extends that beep. The installer enables the PWM overlay for GPIO18 and prints a reboot-required notice.
+The passive beeper plays a startup chirp at 2471 Hz (low), 2752 Hz (medium), and 3056 Hz (high), each for `--beeper-ms` milliseconds. Each successful decode plays one medium beep; another decode while it is sounding extends that beep. The installer enables the PWM overlay for GPIO12 and prints a reboot-required notice.
+
+With a 3.5" SPI TFT (ILI9486, e.g. the LCDWiki/MHS35-style HAT on header pins 1–26), `--display auto` (or `--display /dev/fbN`) draws the last scan plus a short history on the panel — no X needed, it renders straight into the DRM fbdev framebuffer. `sudo scripts/install-service.sh --with-display` adds the `mipi-dbi-spi` + `ads7846` (touch) overlays to `/boot/firmware/config.txt` and installs the `ili9486.bin` init blob; a reboot is required. The display HAT covers pins 1–26, which is why the trigger and beeper moved to pins 36/32.
 
 ## Quick start
 
@@ -71,7 +73,7 @@ cmake --build build -j4
 piscanner devices
 piscanner scan --device /dev/video0
 piscanner scan --width 640 --height 480 --pixfmt yuyv --formats QRCode,Code128 --stats
-piscanner trigger --gpio-line 17
+piscanner trigger --gpio-line 16
 piscanner trigger --trigger stdin --output json
 piscanner decode tests/data/qr --expect
 piscanner bench sample.pgm --iterations 100

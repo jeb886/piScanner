@@ -20,7 +20,8 @@ constexpr int kLowHz = 2471;
 constexpr int kMediumHz = 2752;
 constexpr int kHighHz = 3056;
 constexpr auto kSysfsRoot = "/sys/class/pwm";
-constexpr auto kSetupHint = " (enable dtoverlay=pwm,pin=18,func=2 and reboot)";
+constexpr auto kSetupHint = " (enable the pwm overlay for the configured pin, e.g. dtoverlay=pwm,pin=12,func=4, "
+                            "and reboot)";
 
 int pwmChannelForGpio(int gpio)
 {

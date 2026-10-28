@@ -53,6 +53,7 @@ set(PISCANNER_CORE_SOURCES
     src/DecodeFiles.cpp
     src/Decoder.cpp
     src/Dedupe.cpp
+    src/DisplaySink.cpp
     src/FileFrameSource.cpp
     src/PwmBeeper.cpp
     src/GpioTrigger.cpp

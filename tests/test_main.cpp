@@ -2,6 +2,7 @@
 #include "DecodeFiles.h"
 #include "Decoder.h"
 #include "Dedupe.h"
+#include "DisplaySink.h"
 #include "FileFrameSource.h"
 #include "HidKeys.h"
 #include "ImageFile.h"
@@ -246,6 +247,14 @@ void testArguments()
     CHECK(parse({"piscanner", "capture", "shot.png", "--warmup", "0"}, error).has_value());
     CHECK(parse({"piscanner", "capture", "shot.png", "--source", "some/dir"}, error).has_value());
     CHECK(!parse({"piscanner", "bench", "f.pgm", "--source", "some/dir"}, error).has_value());
+    auto disp = parse({"piscanner", "scan", "--display", "auto", "--display-lines", "3"}, error);
+    CHECK(disp.has_value());
+    if (disp) {
+        CHECK(disp->displayDevice == "auto");
+        CHECK(disp->displayLines == 3);
+    }
+    CHECK(!parse({"piscanner", "decode", "x.png", "--display", "auto"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--display-lines", "0"}, error).has_value());
 }
 
 // Every character of a representative barcode charset must map to a keycode,
@@ -270,6 +279,45 @@ void testHidKeys()
     CHECK(hidKeyForChar(' ', keycode, modifier) && keycode == 0x2C);
     CHECK(hidKeyForChar('\n', keycode, modifier) && keycode == 0x28);
     CHECK(!hidKeyForChar(static_cast<unsigned char>(0xC3), keycode, modifier));
+}
+
+// Headless panel paint: renderDisplayFrame must draw real content into a
+// plain buffer for both supported pixel layouts.
+void testDisplayRender()
+{
+    for (int bpp : {16, 32}) {
+        DisplaySurface surface;
+        surface.width = 320;
+        surface.height = 240;
+        surface.bitsPerPixel = bpp;
+        surface.strideBytes = surface.width * (bpp / 8);
+        std::vector<std::uint8_t> pixels(static_cast<std::size_t>(surface.strideBytes) * surface.height, 0);
+        surface.pixels = pixels.data();
+
+        DisplayState state;
+        state.last = DisplayEntry{"QRCode", "HELLO-WORLD-123", 12.5};
+        state.history.push_back({"Code128", "PREV", 40.0});
+        renderDisplayFrame(surface, state);
+
+        // Background is filled (non-zero) and text pixels differ from it.
+        std::size_t nonZero = 0;
+        for (const auto byte : pixels)
+            nonZero += byte != 0;
+        CHECK(nonZero > pixels.size() / 2);
+
+        // Two distinct colors must appear: bg + text.
+        std::size_t distinct = 0;
+        if (bpp == 16) {
+            const auto* p = reinterpret_cast<const std::uint16_t*>(pixels.data());
+            std::set<std::uint16_t> colors(p, p + pixels.size() / 2);
+            distinct = colors.size();
+        } else {
+            std::set<std::uint32_t> colors(reinterpret_cast<const std::uint32_t*>(pixels.data()),
+                                           reinterpret_cast<const std::uint32_t*>(pixels.data() + pixels.size()));
+            distinct = colors.size();
+        }
+        CHECK(distinct >= 3);
+    }
 }
 
 void testJson()
@@ -633,6 +681,7 @@ int main(int argc, char* argv[])
     testArguments();
     testHidKeys();
     testPixelFormatChoice();
+    testDisplayRender();
     testJson();
     if (argc == 4) {
         g_dataDir = argv[3];

@@ -17,12 +17,14 @@ Options:
   --uninstall       Remove the service unit and installed binary
   --no-build        Use the existing build binary
   --build-dir DIR   Select a build directory (default: build)
+  --with-display    Configure the 3.5" SPI display (ILI9486) + touch
   -h, --help        Show this help
 EOF
 }
 
 UNINSTALL=0
 NO_BUILD=0
+WITH_DISPLAY=0
 BUILD_DIR=build
 
 while (($# > 0)); do
@@ -33,6 +35,10 @@ while (($# > 0)); do
         ;;
     --no-build)
         NO_BUILD=1
+        shift
+        ;;
+    --with-display)
+        WITH_DISPLAY=1
         shift
         ;;
     --build-dir)
@@ -145,8 +151,13 @@ append_config_line() {
 
 ensure_pwm_overlay() {
     local config=$1
+    # Display layout moved the beeper: migrate an older pin=18 line.
+    if config_has_effective_line "$config" 'dtoverlay=pwm,pin=18'; then
+        sed -i -E 's/^([[:space:]]*)dtoverlay=pwm,pin=18,func=2/\1dtoverlay=pwm,pin=12,func=4/' "$config"
+        printf 'Updated PWM beeper overlay to pin=12,func=4 in %s (reboot required).\n' "$config"
+    fi
     if ! config_has_effective_line "$config" '^[[:space:]]*dtoverlay=pwm(,|$)'; then
-        append_config_line "$config" 'dtoverlay=pwm,pin=18,func=2'
+        append_config_line "$config" 'dtoverlay=pwm,pin=12,func=4'
         printf 'Added PWM beeper overlay to %s (reboot required).\n' "$config"
     fi
 }
@@ -228,15 +239,21 @@ else
     printf '%s\n' \
         "# Arguments passed to the piScanner service. See \`piscanner --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCANNER_ARGS="trigger --trigger gpio --device /dev/video0 --output hid --beeper-line 18 --log-file /run/piscanner/piscanner.log"' >"$CONFIG_PATH"
+        'PISCANNER_ARGS="trigger --trigger gpio --gpio-line 16 --device /dev/video0 --output hid --beeper-line 12 --log-file /run/piscanner/piscanner.log"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
 
+# Display-era pin layout: trigger GPIO16 (pin 36), beeper GPIO12 (pin 32).
 if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
-   grep -Eq -- '--beeper-line[[:space:]]+27([[:space:]]|$)' "$CONFIG_PATH"; then
-    sed -i -E 's/--beeper-line[[:space:]]+27/--beeper-line 18/g' "$CONFIG_PATH"
-    printf 'Updated %s from GPIO27 to GPIO18 for the PWM beeper.\n' "$CONFIG_PATH"
+   grep -Eq -- '--beeper-line[[:space:]]+(18|27)([[:space:]]|$)' "$CONFIG_PATH"; then
+    sed -i -E 's/--beeper-line[[:space:]]+(18|27)/--beeper-line 12/g' "$CONFIG_PATH"
+    printf 'Updated %s to GPIO12 (pin 32) for the PWM beeper.\n' "$CONFIG_PATH"
+fi
+if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
+   grep -q '^PISCANNER_ARGS=' "$CONFIG_PATH" && ! grep -q -- '--gpio-line' "$CONFIG_PATH"; then
+    sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --gpio-line 16"|' "$CONFIG_PATH"
+    printf 'Added --gpio-line 16 (pin 36) to %s.\n' "$CONFIG_PATH"
 fi
 
 if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
@@ -245,9 +262,30 @@ if [[ -e "$CONFIG_PATH" || -L "$CONFIG_PATH" ]] &&
     printf 'Added --log-file /run/piscanner/piscanner.log to %s.\n' "$CONFIG_PATH"
 fi
 
-# Hardware PWM overlay for the passive beeper on GPIO18 (header pin 12).
+# Hardware PWM overlay for the passive beeper on GPIO12 (header pin 32).
 CONFIG_TXT=$(config_txt)
 ensure_pwm_overlay "$CONFIG_TXT"
+
+if ((WITH_DISPLAY)); then
+    # 3.5" SPI panel (ILI9486 on spi0-0 via panel-mipi-dbi) + XPT2046 touch
+    # (spi0-1 via ads7846). Reboot required for overlays.
+    if ! config_has_effective_line "$CONFIG_TXT" 'dtparam=spi=on'; then
+        append_config_line "$CONFIG_TXT" 'dtparam=spi=on'
+        printf 'Enabled SPI in %s (reboot required).\n' "$CONFIG_TXT"
+    fi
+    if ! config_has_effective_line "$CONFIG_TXT" 'dtoverlay=mipi-dbi-spi'; then
+        append_config_line "$CONFIG_TXT" 'dtoverlay=mipi-dbi-spi,spi0-0,speed=32000000'
+        append_config_line "$CONFIG_TXT" 'dtparam=compatible=ili9486\0panel-mipi-dbi-spi'
+        append_config_line "$CONFIG_TXT" 'dtparam=width=480,height=320,width-mm=74,height-mm=49'
+        append_config_line "$CONFIG_TXT" 'dtparam=dc-gpio=24,reset-gpio=25,write-only'
+        printf 'Added ILI9486 display overlay to %s (reboot required).\n' "$CONFIG_TXT"
+    fi
+    if ! config_has_effective_line "$CONFIG_TXT" 'dtoverlay=ads7846'; then
+        append_config_line "$CONFIG_TXT" 'dtoverlay=ads7846,cs=1,penirq=17,penirq_pull=2,swapxy=1,pmax=255,xohms=60'
+        printf 'Added XPT2046 touch overlay to %s (reboot required).\n' "$CONFIG_TXT"
+    fi
+    python3 "$REPO_ROOT/scripts/gen-ili9486-bin.py" /lib/firmware/ili9486.bin
+fi
 
 # USB HID gadget: lets the piscanner system user write /dev/hidg0 and wires
 # the gadget unit in before the scanner starts.
