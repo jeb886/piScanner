@@ -541,6 +541,7 @@ void testFileLogging(const char* executable)
     CHECK(text.find("start scan") != std::string::npos);
     CHECK(text.find("decode QR") != std::string::npos);
     CHECK(text.find("ms \"") != std::string::npos);
+    CHECK(text.find("zxing=") != std::string::npos);
     CHECK(text.find("stop") != std::string::npos);
     std::filesystem::remove(logPath);
 }
