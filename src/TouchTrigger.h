@@ -6,9 +6,12 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
+
+struct input_event;
 
 // ORs several Trigger sources (e.g. GPIO button + touchscreen button).
 // One worker thread per inner trigger funnels events into a shared queue.
@@ -27,28 +30,40 @@ private:
     bool stopping_ = false;
 };
 
-// Touchscreen trigger: reads an evdev input device (e.g. the ADS7846 on a
-// 3.5" SPI HAT) and emits Pressed/Released when a touch lands inside a
-// normalized screen rect (fractions of the panel size, so it matches the
-// rendered button at any resolution). Opens nothing when no resistive
-// touchscreen exists — construct via create() which may return nullptr.
-class TouchTrigger final : public Trigger {
+// Pure event-decoding half of TouchTrigger: feed it evdev input_event
+// values and it reports Pressed/Released for touches inside a normalized
+// rect. Kept fd-free so tests can drive it without hardware.
+class TouchDecoder {
 public:
-    // Normalized rect (0..1 of panel width/height). abs coords are mapped
-    // through the device's reported min/max ranges.
-    static std::unique_ptr<TouchTrigger> create(float x0, float y0, float x1, float y1);
-    ~TouchTrigger() override;
-    bool wait(int timeoutMs, TriggerEvent& event) override;
+    TouchDecoder(float x0, float y0, float x1, float y1, int xmin, int xmax, int ymin, int ymax);
+    // Returns an event to emit, or nullopt while the batch continues.
+    std::optional<TriggerEventType> feed(int type, int code, int value);
+    std::string lastRaw() const;
 
 private:
-    TouchTrigger(int fd, float x0, float y0, float x1, float y1,
-                 int xmin, int xmax, int ymin, int ymax);
-    int fd_ = -1;
+    bool inside() const;
     float rx0_, ry0_, rx1_, ry1_;
     int axMin_, axRange_, ayMin_, ayRange_;
     bool down_ = false;
     bool pressSent_ = false;
     int curX_ = 0, curY_ = 0;
+};
+
+// Touchscreen trigger: reads an evdev input device (e.g. the ADS7846 on a
+// 3.5" SPI HAT) and emits Pressed/Released when a touch lands inside a
+// normalized screen rect (fractions of the panel size, so it matches the
+// rendered button at any resolution). create() returns nullptr when no
+// resistive touchscreen exists.
+class TouchTrigger final : public Trigger {
+public:
+    static std::unique_ptr<TouchTrigger> create(float x0, float y0, float x1, float y1);
+    ~TouchTrigger() override;
+    bool wait(int timeoutMs, TriggerEvent& event) override;
+
+private:
+    TouchTrigger(int fd, TouchDecoder decoder);
+    int fd_ = -1;
+    TouchDecoder decoder_;
 };
 
 // Scans /dev/input/event* for an ABS_X+ABS_Y touchscreen (ADS7846/XPT2046

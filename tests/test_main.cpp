@@ -9,10 +9,12 @@
 #include "Output.h"
 #include "Scanner.h"
 #include "Trigger.h"
+#include "TouchTrigger.h"
 #include "V4l2Camera.h"
 
 #include <atomic>
 #include <chrono>
+#include <linux/input.h>
 #include <mutex>
 #include <set>
 #include <sstream>
@@ -318,6 +320,81 @@ void testDisplayRender()
         }
         CHECK(distinct >= 3);
     }
+}
+
+// TouchDecoder: evdev batch ordering variants must all produce a press
+// inside the button rect (and a release on lift). Raw range 0..4095 with
+// the panel's inverted Y axis.
+void testTouchDecoder()
+{
+    // Rect (0,0.75,1,1) covers the bottom quarter of the panel.
+    const auto mk = [] { return TouchDecoder(0.0f, 0.75f, 1.0f, 1.0f, 0, 4095, 0, 4095); };
+
+    {
+        auto d = mk();
+        // Normal order: ABS first, then BTN_TOUCH.
+        CHECK(d.feed(EV_ABS, ABS_X, 2000) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 600) == std::nullopt); // raw 600 -> ny ~0.85 (inverted)
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == TriggerEventType::Pressed);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == TriggerEventType::Released);
+    }
+    {
+        // ADS7846 order: BTN_TOUCH before the ABS sample. Top-right
+        // rect so stale 0,0 (bottom-left after Y invert) stays outside.
+        TouchDecoder d(0.5f, 0.0f, 1.0f, 0.25f, 0, 4095, 0, 4095);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt); // coords still stale
+        CHECK(d.feed(EV_ABS, ABS_X, 3500) == std::nullopt);  // y still stale bottom
+        CHECK(d.feed(EV_ABS, ABS_Y, 3500) == TriggerEventType::Pressed); // ny~0.15 -> inside
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == TriggerEventType::Released);
+    }
+    {
+        auto d = mk();
+        // Press outside the rect (top of screen = low ny after invert) -> nothing.
+        CHECK(d.feed(EV_ABS, ABS_X, 2000) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 3800) == std::nullopt); // ny ~0.07
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == std::nullopt);
+    }
+    {
+        // Degenerate: zero-range axis never fires.
+        TouchDecoder bad(0.0f, 0.75f, 1.0f, 1.0f, 0, 0, 0, 4095);
+        CHECK(bad.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
+    }
+}
+
+// MultiTrigger: events from all wrapped sources must be delivered.
+namespace {
+class PulseTrigger final : public Trigger {
+public:
+    explicit PulseTrigger(int pulses) : pulses_(pulses) {}
+    bool wait(int timeoutMs, TriggerEvent& event) override
+    {
+        (void)timeoutMs;
+        if (sent_ >= pulses_)
+            return false;
+        ++sent_;
+        event.type = TriggerEventType::Pressed;
+        event.timestampUs = static_cast<std::uint64_t>(sent_);
+        return true;
+    }
+
+private:
+    int pulses_;
+    int sent_ = 0;
+};
+}
+
+void testMultiTrigger()
+{
+    std::vector<std::unique_ptr<Trigger>> sources;
+    sources.push_back(std::make_unique<PulseTrigger>(1));
+    sources.push_back(std::make_unique<PulseTrigger>(1));
+    MultiTrigger multi(std::move(sources));
+    TriggerEvent event;
+    int got = 0;
+    for (int i = 0; i < 20 && got < 2; ++i)
+        got += multi.wait(200, event) ? 1 : 0;
+    CHECK(got == 2);
 }
 
 void testJson()
@@ -682,6 +759,8 @@ int main(int argc, char* argv[])
     testHidKeys();
     testPixelFormatChoice();
     testDisplayRender();
+    testTouchDecoder();
+    testMultiTrigger();
     testJson();
     if (argc == 4) {
         g_dataDir = argv[3];
