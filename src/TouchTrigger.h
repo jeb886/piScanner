@@ -47,7 +47,7 @@ private:
     float rx0_, ry0_, rx1_, ry1_;
     int axMin_, axRange_, ayMin_, ayRange_;
     bool down_ = false;
-    bool inside_ = false;
+    bool pressSent_ = false;
     int curX_ = 0, curY_ = 0;
 };
 

@@ -5,6 +5,7 @@
 #include <linux/input.h>
 
 #include <chrono>
+#include <exception>
 #include <cstring>
 #include <filesystem>
 #include <fcntl.h>
@@ -52,12 +53,17 @@ MultiTrigger::MultiTrigger(std::vector<std::unique_ptr<Trigger>> sources)
                         return;
                 }
                 TriggerEvent event;
-                if (t->wait(50, event)) {
-                    {
-                        std::lock_guard<std::mutex> lock(mutex_);
-                        queue_.push_back(event);
+                try {
+                    if (t->wait(50, event)) {
+                        {
+                            std::lock_guard<std::mutex> lock(mutex_);
+                            queue_.push_back(event);
+                        }
+                        cv_.notify_one();
                     }
-                    cv_.notify_one();
+                } catch (const std::exception& e) {
+                    logLine(std::string("trigger worker error ") + e.what());
+                    return;
                 }
             }
         });
@@ -154,27 +160,41 @@ bool TouchTrigger::wait(int timeoutMs, TriggerEvent& event)
     const ssize_t got = ::read(fd_, events, sizeof(events));
     if (got <= 0)
         return false;
+    const auto inside = [this] {
+        const float nx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
+        const float ny = static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
+        return nx >= rx0_ && nx <= rx1_ && ny >= ry0_ && ny <= ry1_;
+    };
     for (std::size_t i = 0; i + sizeof(input_event) <= static_cast<std::size_t>(got); i += sizeof(input_event)) {
         const input_event& e = *reinterpret_cast<const input_event*>(reinterpret_cast<const char*>(events) + i);
-        if (e.type == EV_ABS && e.code == ABS_X)
-            curX_ = e.value;
-        else if (e.type == EV_ABS && e.code == ABS_Y)
-            curY_ = e.value;
-        else if (e.type == EV_KEY && e.code == BTN_TOUCH) {
+        if (e.type == EV_ABS && (e.code == ABS_X || e.code == ABS_Y)) {
+            if (e.code == ABS_X)
+                curX_ = e.value;
+            else
+                curY_ = e.value;
+            // Some drivers send ABS after BTN_TOUCH; a touch that slides
+            // into the button while still held should also fire.
+            if (down_ && !pressSent_ && inside()) {
+                pressSent_ = true;
+                event.type = TriggerEventType::Pressed;
+                event.timestampUs = nowUs();
+                return true;
+            }
+        } else if (e.type == EV_KEY && e.code == BTN_TOUCH) {
             if (e.value == 1) {
-                const float nx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
-                const float ny = static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
                 down_ = true;
-                inside_ = nx >= rx0_ && nx <= rx1_ && ny >= ry0_ && ny <= ry1_;
-                if (inside_) {
+                pressSent_ = false;
+                logLine("touch raw=" + std::to_string(curX_) + "," + std::to_string(curY_));
+                if (inside()) {
+                    pressSent_ = true;
                     event.type = TriggerEventType::Pressed;
                     event.timestampUs = nowUs();
                     return true;
                 }
             } else if (down_) {
                 down_ = false;
-                if (inside_) {
-                    inside_ = false;
+                if (pressSent_) {
+                    pressSent_ = false;
                     event.type = TriggerEventType::Released;
                     event.timestampUs = nowUs();
                     return true;
