@@ -187,38 +187,38 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
         drawText(surface, 6, y + 20, "waiting for a scan...", kDim, 2);
     } else {
         // Decode data first (white, wrapped), then "542ms | EAN-8" green.
-        const int cols = textCols(surface, 2);
+        const int cols = textCols(surface, 3);
         std::string rest = state.last->text;
-        while (!rest.empty() && y < buttonTop - 90) {
+        while (!rest.empty() && y < buttonTop - 120) {
             const std::string row = clipped(rest, cols);
-            drawText(surface, 6, y, row, kText, 2);
-            y += 24; // a scale-2 glyph row is ~20px tall
+            drawText(surface, 6, y, row, kText, 3);
+            y += 36; // a scale-3 glyph row is ~30px tall
             rest = rest.size() > static_cast<std::size_t>(cols) ? rest.substr(static_cast<std::size_t>(cols)) : "";
         }
         std::ostringstream status;
         status << static_cast<long>(state.last->readyMs + 0.5) << "ms | " << state.last->format;
-        drawText(surface, 6, y + 2, status.str(), kGood, 2);
-        y += 24;
+        drawText(surface, 6, y + 2, status.str(), kGood, 3);
+        y += 40;
 
         if (state.stats.count > 0) {
             std::ostringstream stats;
             stats << "avg " << static_cast<long>(state.stats.sumMs / static_cast<double>(state.stats.count) + 0.5)
                   << "ms  min " << static_cast<long>(state.stats.minMs + 0.5)
                   << "  max " << static_cast<long>(state.stats.maxMs + 0.5);
-            drawText(surface, 6, y, stats.str(), kDim, 1);
-            y += 16;
+            drawText(surface, 6, y, stats.str(), kDim, 2);
+            y += 24;
         }
 
-        y = buttonTop - 8 - static_cast<int>(state.history.size()) * 16;
-        y = std::max(y, 120);
+        y = buttonTop - 8 - static_cast<int>(state.history.size()) * 22;
+        y = std::max(y, 140);
         for (const auto& entry : state.history) {
             if (y > buttonTop - 16)
                 break;
-            const int hcols = textCols(surface, 1);
+            const int hcols = textCols(surface, 2);
             std::ostringstream row;
             row << entry.format << " " << static_cast<long>(entry.readyMs + 0.5) << "ms  " << entry.text;
-            drawText(surface, 6, y, clipped(row.str(), hcols), kDim, 1);
-            y += 16;
+            drawText(surface, 6, y, clipped(row.str(), hcols), kDim, 2);
+            y += 22;
         }
     }
 
@@ -411,9 +411,11 @@ std::vector<std::uint8_t> frameToSurface(const Frame& frame, const DisplaySurfac
     const int bpp = surface.bitsPerPixel / 8;
     std::vector<std::uint8_t> out(static_cast<std::size_t>(surface.width) * surface.height * bpp, 0);
     for (int y = 0; y < surface.height; ++y) {
-        const int sy = std::min(y * frame.height / surface.height, frame.height - 1);
         for (int x = 0; x < surface.width; ++x) {
-            const int sx = std::min(x * frame.width / surface.width, frame.width - 1);
+            // Rotate the image -90 (CCW): a landscape camera frame fills a
+            // portrait buffer sideways-landscape (image top -> left edge).
+            const int sx = std::min((surface.height - 1 - y) * frame.width / surface.height, frame.width - 1);
+            const int sy = std::min(x * frame.height / surface.width, frame.height - 1);
             std::uint8_t r = 0, g = 0, b = 0;
             if (frame.fmt == PixelFormat::GREY) {
                 const std::uint8_t v = frame.data[static_cast<std::size_t>(sy) * frame.stride + sx];
