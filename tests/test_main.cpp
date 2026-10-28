@@ -330,8 +330,11 @@ void testDisplayRender()
 // the panel's inverted Y axis.
 void testTouchDecoder()
 {
-    // Rect (0,0.75,1,1) covers the bottom quarter of the panel.
-    const auto mk = [] { return TouchDecoder(0.0f, 0.75f, 1.0f, 1.0f, 0, 4095, 0, 4095); };
+    // Scan rect covers the bottom quarter; capture rect sits out of range
+    // (never hit) unless a test supplies one.
+    const auto mk = [] {
+        return TouchDecoder(0.0f, 0.75f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 4095, 0, 4095);
+    };
 
     {
         auto d = mk();
@@ -344,7 +347,7 @@ void testTouchDecoder()
     {
         // ADS7846 order: BTN_TOUCH before the ABS sample. Top-right
         // rect so stale 0,0 (bottom-left after Y invert) stays outside.
-        TouchDecoder d(0.5f, 0.0f, 1.0f, 0.25f, 0, 4095, 0, 4095);
+        TouchDecoder d(0.5f, 0.0f, 1.0f, 0.25f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 4095, 0, 4095);
         CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt); // coords still stale
         CHECK(d.feed(EV_ABS, ABS_X, 3500) == std::nullopt);  // y still stale bottom
         CHECK(d.feed(EV_ABS, ABS_Y, 3500) == TriggerEventType::Pressed); // ny~0.15 -> inside
@@ -360,8 +363,29 @@ void testTouchDecoder()
     }
     {
         // Degenerate: zero-range axis never fires.
-        TouchDecoder bad(0.0f, 0.75f, 1.0f, 1.0f, 0, 0, 0, 4095);
+        TouchDecoder bad(0.0f, 0.75f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 0, 0, 4095);
         CHECK(bad.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
+    }
+    {
+        // Capture rect (top-right band) emits Aux, not Pressed.
+        TouchDecoder d(0.0f, 0.75f, 1.0f, 1.0f, 0.5f, 0.0f, 1.0f, 0.25f, 0, 4095, 0, 4095);
+        CHECK(d.feed(EV_ABS, ABS_X, 3500) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 3500) == std::nullopt); // ny~0.15, nx~0.85 -> capture rect
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == TriggerEventType::Aux);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == std::nullopt); // Aux has no release
+    }
+    {
+        // Photo mode: any tap becomes Aux (the exit tap).
+        std::atomic<int> mode{1};
+        TouchDecoder d(0.0f, 0.75f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 0, 4095, 0, 4095, 0, &mode);
+        CHECK(d.feed(EV_ABS, ABS_X, 2000) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 2000) == std::nullopt); // dead centre
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == TriggerEventType::Aux);
+        // Back in UI mode the same coordinates do nothing.
+        mode = 0;
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 0) == std::nullopt);
+        CHECK(d.feed(EV_ABS, ABS_Y, 2000) == std::nullopt);
+        CHECK(d.feed(EV_KEY, BTN_TOUCH, 1) == std::nullopt);
     }
 }
 

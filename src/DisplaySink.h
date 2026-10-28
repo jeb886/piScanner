@@ -3,9 +3,11 @@
 #include "Config.h"
 #include "Output.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -27,6 +29,23 @@ struct DisplayEntry {
     double readyMs = 0;
 };
 
+// Rolling decode-latency stats shown under the latest result.
+struct DisplayStats {
+    std::uint64_t count = 0;
+    double sumMs = 0;
+    double minMs = -1;
+    double maxMs = 0;
+    void add(double ms)
+    {
+        ++count;
+        sumMs += ms;
+        if (minMs < 0 || ms < minMs)
+            minMs = ms;
+        if (ms > maxMs)
+            maxMs = ms;
+    }
+};
+
 // Everything the frame renderer needs; the sink owns it under a mutex.
 struct DisplayState {
     std::optional<DisplayEntry> last;
@@ -35,6 +54,7 @@ struct DisplayState {
     std::uint64_t results = 0;
     std::uint64_t timeouts = 0;
     bool timedOut = false; // the most recent event was a scan timeout
+    DisplayStats stats;
 };
 
 // Normalized rect (fractions of panel size) of the on-screen SCAN button;
@@ -43,6 +63,8 @@ struct DisplayButtonRect {
     float x0 = 0.0f, y0 = 0.88f, x1 = 1.0f, y1 = 1.0f;
 };
 inline constexpr DisplayButtonRect kTriggerButton{};
+// Red square capture button: same height as SCAN, on the right above it.
+inline constexpr DisplayButtonRect kCaptureButton{0.78f, 0.76f, 1.0f, 0.88f};
 
 // Repaints the whole screen into `surface`. No fbdev involvement, so tests
 // run it on a plain heap buffer; anything outside the surface is clipped.
@@ -55,12 +77,16 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state);
 // a missing display never breaks scanning.
 class DisplaySink final : public ResultSink {
 public:
-    DisplaySink(ResultSink& inner, const Config& config);
+    DisplaySink(ResultSink& inner, const Config& config,
+                std::shared_ptr<std::atomic<int>> mode = nullptr);
     ~DisplaySink() override;
     DisplaySink(const DisplaySink&) = delete;
     DisplaySink& operator=(const DisplaySink&) = delete;
     void onResult(const ScanResult& result) override;
     void onTimeout(std::uint64_t timestampUs) override;
+    // A captured frame: photo mode shows it fullscreen; calling again
+    // (the exit tap) returns to the normal UI.
+    void onAux(const Frame& frame) override;
 
 private:
     void open(const Config& config);
@@ -76,5 +102,9 @@ private:
     std::vector<std::uint8_t> backing_;
     DisplaySurface surface_{};
     DisplayState state_;
+    // mode: 0 = scanner UI, 1 = fullscreen photo (shared with the touch
+    // decoder so it can turn any tap into an exit event)
+    std::shared_ptr<std::atomic<int>> mode_;
+    std::vector<std::uint8_t> photo_; // rendered-size image for photo mode
     std::mutex mutex_;
 };

@@ -7,7 +7,8 @@
 
 enum class TriggerEventType {
     Pressed,
-    Released
+    Released,
+    Aux // secondary button: capture image / exit image view
 };
 
 struct TriggerEvent {

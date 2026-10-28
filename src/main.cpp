@@ -79,20 +79,25 @@ int main(int argc, char* argv[])
     }
 
     std::unique_ptr<Trigger> trigger;
+    // Shared ui/photo mode flag: DisplaySink flips it on capture, the
+    // touch decoder reads it so a tap on the fullscreen photo exits.
+    auto displayMode = std::make_shared<std::atomic<int>>(0);
     try {
         if (config.command == "trigger") {
             if (config.trigger == "gpio")
                 trigger = std::make_unique<GpioTrigger>(config);
             else
                 trigger = std::make_unique<StdinTrigger>();
-            // A display on a touch panel gets an on-screen SCAN button that
-            // acts as a second trigger source alongside GPIO/stdin.
+            // A display on a touch panel gets on-screen SCAN/capture
+            // buttons acting as a second trigger source alongside GPIO.
             if (!config.displayDevice.empty()) {
                 // Hit area is a little taller than the visual button —
                 // resistive-panel taps land loosely around the target.
                 auto touch = TouchTrigger::create(kTriggerButton.x0, kTriggerButton.y0 - 0.07f,
                                                   kTriggerButton.x1, kTriggerButton.y1,
-                                                  config.displayRotate);
+                                                  kCaptureButton.x0 - 0.04f, kCaptureButton.y0 - 0.04f,
+                                                  kCaptureButton.x1 + 0.04f, kCaptureButton.y1,
+                                                  config.displayRotate, displayMode.get());
                 if (touch) {
                     std::vector<std::unique_ptr<Trigger>> sources;
                     sources.push_back(std::move(trigger));
@@ -121,7 +126,7 @@ int main(int argc, char* argv[])
         // see every event even when the panel draws slowly (or not at all).
         if (!config.displayDevice.empty()) {
             displayInner = std::move(sink);
-            sink = std::make_unique<DisplaySink>(*displayInner, config);
+            sink = std::make_unique<DisplaySink>(*displayInner, config, displayMode);
         }
         if (config.beeperLine >= 0) {
             beeper = std::make_unique<PwmBeeper>(config);

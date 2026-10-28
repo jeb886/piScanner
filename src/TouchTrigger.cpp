@@ -84,14 +84,17 @@ bool MultiTrigger::wait(int timeoutMs, TriggerEvent& event)
     return true;
 }
 
-TouchDecoder::TouchDecoder(float x0, float y0, float x1, float y1, int xmin, int xmax, int ymin, int ymax,
-                           int rotation)
+TouchDecoder::TouchDecoder(float x0, float y0, float x1, float y1,
+                           float cx0, float cy0, float cx1, float cy1,
+                           int xmin, int xmax, int ymin, int ymax,
+                           int rotation, const std::atomic<int>* mode)
     : rotation_(rotation), rx0_(x0), ry0_(y0), rx1_(x1), ry1_(y1),
-      axMin_(xmin), axRange_(xmax - xmin), ayMin_(ymin), ayRange_(ymax - ymin)
+      cx0_(cx0), cy0_(cy0), cx1_(cx1), cy1_(cy1),
+      axMin_(xmin), axRange_(xmax - xmin), ayMin_(ymin), ayRange_(ymax - ymin), mode_(mode)
 {
 }
 
-bool TouchDecoder::inside() const
+bool TouchDecoder::inside(float x0, float y0, float x1, float y1) const
 {
     if (axRange_ <= 0 || ayRange_ <= 0)
         return false;
@@ -119,7 +122,7 @@ bool TouchDecoder::inside() const
         ny = 1.0f - ry;
         break;
     }
-    return nx >= rx0_ && nx <= rx1_ && ny >= ry0_ && ny <= ry1_;
+    return nx >= x0 && nx <= x1 && ny >= y0 && ny <= y1;
 }
 
 std::string TouchDecoder::lastRaw() const
@@ -129,32 +132,44 @@ std::string TouchDecoder::lastRaw() const
 
 std::optional<TriggerEventType> TouchDecoder::feed(int type, int code, int value)
 {
+    const auto decide = [this]() -> std::optional<TriggerEventType> {
+        // In photo mode any tap exits back to the UI.
+        if (mode_ != nullptr && mode_->load() == 1)
+            return TriggerEventType::Aux;
+        if (inside(cx0_, cy0_, cx1_, cy1_)) {
+            auxSent_ = true;
+            return TriggerEventType::Aux;
+        }
+        if (inside(rx0_, ry0_, rx1_, ry1_)) {
+            pressSent_ = true;
+            return TriggerEventType::Pressed;
+        }
+        return std::nullopt;
+    };
     if (type == EV_ABS && (code == ABS_X || code == ABS_Y)) {
         if (code == ABS_X)
             curX_ = value;
         else
             curY_ = value;
         // Some drivers send ABS after BTN_TOUCH; a touch that slides
-        // into the button while still held should also fire.
-        if (down_ && !pressSent_ && inside()) {
-            pressSent_ = true;
-            return TriggerEventType::Pressed;
-        }
+        // into a button while still held should also fire.
+        if (down_ && !pressSent_ && !auxSent_)
+            return decide();
     } else if (type == EV_KEY && code == BTN_TOUCH) {
         if (value == 1) {
             down_ = true;
             pressSent_ = false;
+            auxSent_ = false;
             logLine("touch raw=" + lastRaw());
-            if (inside()) {
-                pressSent_ = true;
-                return TriggerEventType::Pressed;
-            }
-        } else if (down_) {
+            return decide();
+        }
+        if (down_) {
             down_ = false;
             if (pressSent_) {
                 pressSent_ = false;
                 return TriggerEventType::Released;
             }
+            auxSent_ = false;
         }
     }
     return std::nullopt;
@@ -187,7 +202,9 @@ std::string findTouchDevice()
     return {};
 }
 
-std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1, float y1, int rotation)
+std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1, float y1,
+                                                float cx0, float cy0, float cx1, float cy1,
+                                                int rotation, const std::atomic<int>* mode)
 {
     const std::string path = findTouchDevice();
     if (path.empty())
@@ -203,7 +220,7 @@ std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1,
     }
     logLine("touch " + path);
     return std::unique_ptr<TouchTrigger>(
-        new TouchTrigger(fd, TouchDecoder(x0, y0, x1, y1, xmin, xmax, ymin, ymax, rotation)));
+        new TouchTrigger(fd, TouchDecoder(x0, y0, x1, y1, cx0, cy0, cx1, cy1, xmin, xmax, ymin, ymax, rotation, mode)));
 }
 
 TouchTrigger::TouchTrigger(int fd, TouchDecoder decoder) : fd_(fd), decoder_(decoder) {}
