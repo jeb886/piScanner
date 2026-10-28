@@ -37,6 +37,13 @@ struct DisplayState {
     bool timedOut = false; // the most recent event was a scan timeout
 };
 
+// Normalized rect (fractions of panel size) of the on-screen SCAN button;
+// TouchTrigger uses the same rect for hit-testing.
+struct DisplayButtonRect {
+    float x0 = 0.0f, y0 = 0.82f, x1 = 1.0f, y1 = 1.0f;
+};
+inline constexpr DisplayButtonRect kTriggerButton{};
+
 // Repaints the whole screen into `surface`. No fbdev involvement, so tests
 // run it on a plain heap buffer; anything outside the surface is clipped.
 void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state);
