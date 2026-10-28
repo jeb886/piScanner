@@ -132,9 +132,15 @@ std::string logSafeText(const std::string& text)
 
 void LogSink::onResult(const ScanResult& result)
 {
+    // Headline time is end-to-end readiness: trigger press (or frame
+    // capture when untriggered) until the decoded string reaches the
+    // sink. zxing= is the library decode time inside that span.
+    const auto now = monotonicNowUs();
+    const auto baseUs = result.triggerTimestampUs != 0 ? result.triggerTimestampUs : result.frameTimestampUs;
+    const double readyMs = now > baseUs ? static_cast<double>(now - baseUs) / 1000.0 : 0.0;
     std::ostringstream line;
-    line << "decode " << result.format << ' ' << std::fixed << std::setprecision(1) << result.decodeMs << "ms \""
-         << logSafeText(result.text) << '"';
+    line << "decode " << result.format << ' ' << std::fixed << std::setprecision(1) << readyMs << "ms \""
+         << logSafeText(result.text) << "\" zxing=" << result.decodeMs << "ms";
     logLine(line.str());
     inner_.onResult(result);
 }
