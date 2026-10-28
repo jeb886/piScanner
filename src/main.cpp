@@ -88,7 +88,9 @@ int main(int argc, char* argv[])
             // A display on a touch panel gets an on-screen SCAN button that
             // acts as a second trigger source alongside GPIO/stdin.
             if (!config.displayDevice.empty()) {
-                auto touch = TouchTrigger::create(kTriggerButton.x0, kTriggerButton.y0,
+                // Hit area is a little taller than the visual button —
+                // resistive-panel taps land loosely around the target.
+                auto touch = TouchTrigger::create(kTriggerButton.x0, kTriggerButton.y0 - 0.07f,
                                                   kTriggerButton.x1, kTriggerButton.y1);
                 if (touch) {
                     std::vector<std::unique_ptr<Trigger>> sources;
