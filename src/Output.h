@@ -48,6 +48,8 @@ public:
 
 private:
     int fd_ = -1;
+    std::string device_;
+    bool disconnected_ = false;
     std::mutex mutex_;
 };
 
