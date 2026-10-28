@@ -47,6 +47,15 @@ const std::uint16_t kDim = rgb565(0x88, 0x88, 0x90);
 const std::uint16_t kGood = rgb565(0x60, 0xe0, 0x60);
 const std::uint16_t kWarn = rgb565(0xe0, 0xa0, 0x40);
 
+int xioctl(int fd, unsigned long request, void* argument)
+{
+    int result;
+    do {
+        result = ioctl(fd, request, argument);
+    } while (result == -1 && errno == EINTR);
+    return result;
+}
+
 void putPixel(DisplaySurface& s, int x, int y, std::uint16_t color)
 {
     if (x < 0 || y < 0 || x >= s.width || y >= s.height || s.pixels == nullptr)
@@ -54,7 +63,7 @@ void putPixel(DisplaySurface& s, int x, int y, std::uint16_t color)
     if (s.bitsPerPixel == 16) {
         auto* dst = reinterpret_cast<std::uint16_t*>(s.pixels + static_cast<std::size_t>(y) * s.strideBytes + x * 2);
         *dst = color;
-    } else {
+    } else if (s.bitsPerPixel == 32) {
         const std::uint8_t r = static_cast<std::uint8_t>(((color >> 11) & 0x1f) << 3);
         const std::uint8_t g = static_cast<std::uint8_t>(((color >> 5) & 0x3f) << 2);
         const std::uint8_t b = static_cast<std::uint8_t>((color & 0x1f) << 3);
@@ -232,7 +241,7 @@ void DisplaySink::open(const Config& config)
 
     fb_var_screeninfo var{};
     fb_fix_screeninfo fix{};
-    if (ioctl(fd_, FBIOGET_VSCREENINFO, &var) < 0 || ioctl(fd_, FBIOGET_FSCREENINFO, &fix) < 0) {
+    if (xioctl(fd_, FBIOGET_VSCREENINFO, &var) < 0 || xioctl(fd_, FBIOGET_FSCREENINFO, &fix) < 0) {
         std::cerr << "warning: " << path << " is not a framebuffer; display disabled\n";
         close();
         return;

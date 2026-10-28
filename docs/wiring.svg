@@ -2,11 +2,12 @@
 <rect width="1400" height="1020" fill="#fff"/>
 <text x="700" y="44" font-size="28" font-weight="bold" text-anchor="middle">piScanner wiring — Raspberry Pi 5, board viewed from above</text>
 <text x="700" y="76" font-size="16" text-anchor="middle" fill="#555">40-pin header: pin 1 is the square pad at the end farthest from the USB/Ethernet ports. Odd pins = inner row, even pins = board-edge row.</text>
-<path d="M370,222 V300 h-110 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M430,222 V320 h-110 V400" fill="none" stroke="#1f6fd1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M430,170 H460.0 V320 H620 V400" fill="none" stroke="#c62828" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M490,170 H520.0 V300 H650 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1090,170 V270 H310 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1150,170 V250 H330 V400" fill="none" stroke="#1f6fd1" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1030,170 V230 H620 V400" fill="none" stroke="#c62828" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M970,170 V290 H660 V400" fill="none" stroke="#222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="96" y="140" width="1208" height="112" rx="8" fill="#1b1b1b"/>
+<rect x="108" y="146" width="764" height="100" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="8 5"/>
 <text x="90" y="175" font-size="12" text-anchor="end" fill="#555">edge</text>
 <text x="90" y="227" font-size="12" text-anchor="end" fill="#555">inner</text>
 <rect x="113" y="205" width="34" height="34" fill="#f39c12" stroke="#fff" stroke-width="2"/>
@@ -42,33 +43,29 @@
 <rect x="284.5" y="114" width="51.0" height="19" fill="#fff"/>
 <text x="310" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO14</text>
 <circle cx="370" cy="222" r="17" fill="#444"/>
-<circle cx="370" cy="222" r="22" fill="none" stroke="#ffd600" stroke-width="4"/>
 <text x="370" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">9</text>
 <rect x="355.75" y="256" width="28.5" height="19" fill="#fff"/>
-<text x="370" y="270" font-size="12" text-anchor="middle" fill="#000" font-weight="bold">GND</text>
+<text x="370" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GND</text>
 <circle cx="370" cy="170" r="17" fill="#5d8a5d"/>
 <text x="370" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">10</text>
 <rect x="344.5" y="114" width="51.0" height="19" fill="#fff"/>
 <text x="370" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO15</text>
 <circle cx="430" cy="222" r="17" fill="#5d8a5d"/>
-<circle cx="430" cy="222" r="22" fill="none" stroke="#1f6fd1" stroke-width="4"/>
 <text x="430" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">11</text>
 <rect x="404.5" y="256" width="51.0" height="19" fill="#fff"/>
-<text x="430" y="270" font-size="12" text-anchor="middle" fill="#1f6fd1" font-weight="bold">GPIO17</text>
+<text x="430" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO17</text>
 <circle cx="430" cy="170" r="17" fill="#5d8a5d"/>
-<circle cx="430" cy="170" r="22" fill="none" stroke="#c62828" stroke-width="4"/>
 <text x="430" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">12</text>
 <rect x="404.5" y="114" width="51.0" height="19" fill="#fff"/>
-<text x="430" y="128" font-size="12" text-anchor="middle" fill="#c62828" font-weight="bold">GPIO18</text>
+<text x="430" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO18</text>
 <circle cx="490" cy="222" r="17" fill="#5d8a5d"/>
 <text x="490" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">13</text>
 <rect x="464.5" y="256" width="51.0" height="19" fill="#fff"/>
 <text x="490" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO27</text>
 <circle cx="490" cy="170" r="17" fill="#444"/>
-<circle cx="490" cy="170" r="22" fill="none" stroke="#ffd600" stroke-width="4"/>
 <text x="490" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">14</text>
 <rect x="475.75" y="114" width="28.5" height="19" fill="#fff"/>
-<text x="490" y="128" font-size="12" text-anchor="middle" fill="#000" font-weight="bold">GND</text>
+<text x="490" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GND</text>
 <circle cx="550" cy="222" r="17" fill="#5d8a5d"/>
 <text x="550" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">15</text>
 <rect x="524.5" y="256" width="51.0" height="19" fill="#fff"/>
@@ -130,33 +127,37 @@
 <rect x="948.25" y="256" width="43.5" height="19" fill="#fff"/>
 <text x="970" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO5</text>
 <circle cx="970" cy="170" r="17" fill="#444"/>
+<circle cx="970" cy="170" r="22" fill="none" stroke="#ffd600" stroke-width="4"/>
 <text x="970" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">30</text>
 <rect x="955.75" y="114" width="28.5" height="19" fill="#fff"/>
-<text x="970" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GND</text>
+<text x="970" y="128" font-size="12" text-anchor="middle" fill="#000" font-weight="bold">GND</text>
 <circle cx="1030" cy="222" r="17" fill="#5d8a5d"/>
 <text x="1030" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">31</text>
 <rect x="1008.25" y="256" width="43.5" height="19" fill="#fff"/>
 <text x="1030" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO6</text>
 <circle cx="1030" cy="170" r="17" fill="#5d8a5d"/>
+<circle cx="1030" cy="170" r="22" fill="none" stroke="#c62828" stroke-width="4"/>
 <text x="1030" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">32</text>
 <rect x="1004.5" y="114" width="51.0" height="19" fill="#fff"/>
-<text x="1030" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO12</text>
+<text x="1030" y="128" font-size="12" text-anchor="middle" fill="#c62828" font-weight="bold">GPIO12</text>
 <circle cx="1090" cy="222" r="17" fill="#5d8a5d"/>
 <text x="1090" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">33</text>
 <rect x="1064.5" y="256" width="51.0" height="19" fill="#fff"/>
 <text x="1090" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO13</text>
 <circle cx="1090" cy="170" r="17" fill="#444"/>
+<circle cx="1090" cy="170" r="22" fill="none" stroke="#ffd600" stroke-width="4"/>
 <text x="1090" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">34</text>
 <rect x="1075.75" y="114" width="28.5" height="19" fill="#fff"/>
-<text x="1090" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GND</text>
+<text x="1090" y="128" font-size="12" text-anchor="middle" fill="#000" font-weight="bold">GND</text>
 <circle cx="1150" cy="222" r="17" fill="#5d8a5d"/>
 <text x="1150" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">35</text>
 <rect x="1124.5" y="256" width="51.0" height="19" fill="#fff"/>
 <text x="1150" y="270" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO19</text>
 <circle cx="1150" cy="170" r="17" fill="#5d8a5d"/>
+<circle cx="1150" cy="170" r="22" fill="none" stroke="#1f6fd1" stroke-width="4"/>
 <text x="1150" y="175" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">36</text>
 <rect x="1124.5" y="114" width="51.0" height="19" fill="#fff"/>
-<text x="1150" y="128" font-size="12" text-anchor="middle" fill="#333" font-weight="normal">GPIO16</text>
+<text x="1150" y="128" font-size="12" text-anchor="middle" fill="#1f6fd1" font-weight="bold">GPIO16</text>
 <circle cx="1210" cy="222" r="17" fill="#5d8a5d"/>
 <text x="1210" y="227" font-size="13" font-weight="bold" text-anchor="middle" fill="#fff">37</text>
 <rect x="1184.5" y="256" width="51.0" height="19" fill="#fff"/>
@@ -178,17 +179,18 @@
 <circle cx="900" cy="390" r="10" fill="#444"/><text x="920" y="395" font-size="15">Ground (GND)</text>
 <circle cx="900" cy="420" r="10" fill="#5d8a5d"/><text x="920" y="425" font-size="15">GPIO (BCM number)</text>
 <circle cx="900" cy="450" r="12" fill="none" stroke="#ffd600" stroke-width="4"/><text x="920" y="455" font-size="15">Pin used by piScanner</text>
+<rect x="888" y="472" width="24" height="16" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="4 3"/><text x="920" y="485" font-size="15">Optional 3.5" SPI display HAT covers pins 1–26</text>
 <rect x="240.0" y="400" width="100" height="80" rx="8" fill="#ddd" stroke="#333" stroke-width="2"/>
 <circle cx="290.0" cy="440" r="22" fill="#333"/>
 <text x="290.0" y="510" font-size="17" font-weight="bold" text-anchor="middle" fill="#1f6fd1">Trigger switch</text>
 <text x="290.0" y="532" font-size="14" text-anchor="middle">momentary, normally open</text>
-<text x="290.0" y="552" font-size="14" text-anchor="middle">pin 11 (GPIO17) ↔ pin 9 (GND)</text>
+<text x="290.0" y="552" font-size="14" text-anchor="middle">pin 36 (GPIO16) ↔ pin 34 (GND)</text>
 <circle cx="635" cy="445" r="45" fill="#222"/><circle cx="635" cy="445" r="8" fill="#555"/>
 <text x="608" y="396" font-size="18" font-weight="bold" fill="#c62828" text-anchor="end">+</text>
 <text x="662" y="396" font-size="18" font-weight="bold">−</text>
 <text x="635" y="515" font-size="17" font-weight="bold" text-anchor="middle" fill="#c62828">Beeper</text>
 <text x="635" y="537" font-size="14" text-anchor="middle">2-wire PASSIVE buzzer (hardware PWM tones)</text>
-<text x="635" y="557" font-size="14" text-anchor="middle">+ → pin 12 (GPIO18), − → pin 14 (GND)</text>
+<text x="635" y="557" font-size="14" text-anchor="middle">+ → pin 32 (GPIO12), − → pin 30 (GND)</text>
 <text x="150" y="615" font-size="18" font-weight="bold">USB connections</text>
 <rect x="150" y="635" width="420" height="280" rx="16" fill="#2e7d32"/>
 <rect x="175" y="645" width="330" height="26" fill="#1b1b1b"/><text x="340" y="663" font-size="13" text-anchor="middle" fill="#fff">40-pin header (pin 1 ← this end)</text>
@@ -208,13 +210,13 @@
 <text x="1040" y="650" font-size="17" font-weight="bold">Notes</text>
 <text x="1040" y="680" font-size="14" fill="#c62828" font-weight="bold">GPIO pins are 3.3 V only.</text>
 <text x="1040" y="700" font-size="14" fill="#222" font-weight="normal">Never connect 5 V to a GPIO pin.</text>
-<text x="1040" y="720" font-size="14" fill="#222" font-weight="normal"></text>
+<text x="1040" y="720" font-size="14" fill="#222" font-weight="normal">A 3.5" SPI display HAT covers pins 1–26;</text>
 <text x="1040" y="740" font-size="14" fill="#222" font-weight="normal">Beeper: small piezo connects directly;</text>
 <text x="1040" y="760" font-size="14" fill="#222" font-weight="normal">a magnetic (coil) buzzer needs an NPN</text>
-<text x="1040" y="780" font-size="14" fill="#222" font-weight="normal">transistor. Installer enables PWM on GPIO18.</text>
-<text x="1040" y="800" font-size="14" fill="#222" font-weight="normal"></text>
+<text x="1040" y="780" font-size="14" fill="#222" font-weight="normal">transistor. Installer enables PWM on GPIO12.</text>
+<text x="1040" y="800" font-size="14" fill="#222" font-weight="normal">trigger and beeper sit on the free pins.</text>
 <text x="1040" y="820" font-size="14" fill="#222" font-weight="normal">Trigger uses the Pi's internal pull-up;</text>
-<text x="1040" y="840" font-size="14" fill="#222" font-weight="normal">pressing shorts GPIO17 to GND.</text>
+<text x="1040" y="840" font-size="14" fill="#222" font-weight="normal">pressing shorts GPIO16 to GND.</text>
 <text x="1040" y="860" font-size="14" fill="#222" font-weight="normal"></text>
 <text x="1040" y="880" font-size="14" fill="#222" font-weight="normal">A PC port may not power Pi 5 + Brio.</text>
 <text x="1040" y="900" font-size="14" fill="#222" font-weight="normal">If it browns out, use a USB-C power/</text>
