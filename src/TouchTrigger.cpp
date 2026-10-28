@@ -162,7 +162,9 @@ bool TouchTrigger::wait(int timeoutMs, TriggerEvent& event)
         return false;
     const auto inside = [this] {
         const float nx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
-        const float ny = static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
+        // The piscreen overlay reports Y inverted relative to the fbdev
+        // panel (bottom of screen reads as low raw Y); flip it back.
+        const float ny = 1.0f - static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
         return nx >= rx0_ && nx <= rx1_ && ny >= ry0_ && ny <= ry1_;
     };
     for (std::size_t i = 0; i + sizeof(input_event) <= static_cast<std::size_t>(got); i += sizeof(input_event)) {
