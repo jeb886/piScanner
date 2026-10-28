@@ -239,7 +239,7 @@ else
     printf '%s\n' \
         "# Arguments passed to the piScanner service. See \`piscanner --help\`." \
         '# Tip: use a stable camera path from /dev/v4l/by-id/ instead of /dev/video0.' \
-        'PISCANNER_ARGS="trigger --trigger gpio --gpio-line 16 --device /dev/video0 --output hid --beeper-line 12 --log-file /run/piscanner/piscanner.log"' >"$CONFIG_PATH"
+        'PISCANNER_ARGS="trigger --trigger gpio --gpio-line 16 --device /dev/video0 --output hid --beeper-line 12 --log-file /run/piscanner/piscanner.log --display auto"' >"$CONFIG_PATH"
     chmod 0644 "$CONFIG_PATH"
     printf 'Created %s.\n' "$CONFIG_PATH"
 fi
@@ -267,24 +267,26 @@ CONFIG_TXT=$(config_txt)
 ensure_pwm_overlay "$CONFIG_TXT"
 
 if ((WITH_DISPLAY)); then
-    # 3.5" SPI panel (ILI9486 on spi0-0 via panel-mipi-dbi) + XPT2046 touch
-    # (spi0-1 via ads7846). Reboot required for overlays.
+    # 3.5" SPI HAT (ILI9486 panel + XPT2046 touch). The piscreen overlay
+    # brings up both on spi0 (display cs0, touch cs1) via the fbtft
+    # fb_ili9486 driver -> /dev/fbN. Reboot required.
     if ! config_has_effective_line "$CONFIG_TXT" 'dtparam=spi=on'; then
         append_config_line "$CONFIG_TXT" 'dtparam=spi=on'
         printf 'Enabled SPI in %s (reboot required).\n' "$CONFIG_TXT"
     fi
-    if ! config_has_effective_line "$CONFIG_TXT" 'dtoverlay=mipi-dbi-spi'; then
-        append_config_line "$CONFIG_TXT" 'dtoverlay=mipi-dbi-spi,spi0-0,speed=32000000'
-        append_config_line "$CONFIG_TXT" 'dtparam=compatible=ili9486\0panel-mipi-dbi-spi'
-        append_config_line "$CONFIG_TXT" 'dtparam=width=480,height=320,width-mm=74,height-mm=49'
-        append_config_line "$CONFIG_TXT" 'dtparam=dc-gpio=24,reset-gpio=25,write-only'
-        printf 'Added ILI9486 display overlay to %s (reboot required).\n' "$CONFIG_TXT"
+    if ! config_has_effective_line "$CONFIG_TXT" 'dtoverlay=piscreen'; then
+        append_config_line "$CONFIG_TXT" 'dtoverlay=piscreen'
+        printf 'Added piscreen display/touch overlay to %s (reboot required).\n' "$CONFIG_TXT"
     fi
-    if ! config_has_effective_line "$CONFIG_TXT" 'dtoverlay=ads7846'; then
-        append_config_line "$CONFIG_TXT" 'dtoverlay=ads7846,cs=1,penirq=17,penirq_pull=2,swapxy=1,pmax=255,xohms=60'
-        printf 'Added XPT2046 touch overlay to %s (reboot required).\n' "$CONFIG_TXT"
+    # Touchscreen evdev nodes need group "input" for the service account.
+    if getent group input >/dev/null 2>&1; then
+        usermod -aG input piscanner 2>/dev/null || true
     fi
-    python3 "$REPO_ROOT/scripts/gen-ili9486-bin.py" /lib/firmware/ili9486.bin
+    # Show results on the panel when the service starts.
+    if grep -q '^PISCANNER_ARGS=' "$CONFIG_PATH" 2>/dev/null && ! grep -q -- '--display' "$CONFIG_PATH"; then
+        sed -i -E 's|^(PISCANNER_ARGS=".*)"$|\1 --display auto"|' "$CONFIG_PATH"
+        printf 'Added --display auto to %s.\n' "$CONFIG_PATH"
+    fi
 fi
 
 # USB HID gadget: lets the piscanner system user write /dev/hidg0 and wires

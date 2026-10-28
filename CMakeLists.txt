@@ -61,6 +61,7 @@ set(PISCANNER_CORE_SOURCES
     src/Log.cpp
     src/Output.cpp
     src/Scanner.cpp
+    src/TouchTrigger.cpp
     src/V4l2Camera.cpp
 )
 

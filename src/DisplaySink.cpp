@@ -174,6 +174,8 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
         return;
     fillRect(surface, 0, 0, surface.width, surface.height, kBg);
 
+    const int buttonTop = static_cast<int>(kTriggerButton.y0 * surface.height);
+
     int y = 4;
     fillRect(surface, 0, 0, surface.width, 26, kHeader);
     drawText(surface, 6, 7, "piScanner", kText, 2);
@@ -183,33 +185,40 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
 
     if (!state.last) {
         drawText(surface, 6, y + 20, "waiting for a scan...", kDim, 2);
-        return;
+    } else {
+        drawText(surface, 6, y, state.last->format, kGood, 3);
+        y += 34;
+        const int cols = textCols(surface, 2);
+        std::string rest = state.last->text;
+        while (!rest.empty() && y < buttonTop - 60) {
+            const std::string row = clipped(rest, cols);
+            drawText(surface, 6, y, row, kText, 2);
+            y += 24; // a scale-2 glyph row is ~20px tall
+            rest = rest.size() > static_cast<std::size_t>(cols) ? rest.substr(static_cast<std::size_t>(cols)) : "";
+        }
+        std::ostringstream ms;
+        ms << static_cast<long>(state.last->readyMs + 0.5) << "ms";
+        drawText(surface, 6, y + 2, ms.str(), kDim, 2);
+        y += 24;
+
+        y = buttonTop - 8 - static_cast<int>(state.history.size()) * 16;
+        y = std::max(y, 120);
+        for (const auto& entry : state.history) {
+            if (y > buttonTop - 16)
+                break;
+            const int hcols = textCols(surface, 1);
+            std::ostringstream row;
+            row << entry.format << " " << static_cast<long>(entry.readyMs + 0.5) << "ms  " << entry.text;
+            drawText(surface, 6, y, clipped(row.str(), hcols), kDim, 1);
+            y += 16;
+        }
     }
 
-    drawText(surface, 6, y, state.last->format, kGood, 3);
-    y += 34;
-    const int cols = textCols(surface, 2);
-    std::string rest = state.last->text;
-    while (!rest.empty() && y < surface.height - 60) {
-        const std::string row = clipped(rest, cols);
-        drawText(surface, 6, y, row, kText, 2);
-        y += 24; // a scale-2 glyph row is ~20px tall
-        rest = rest.size() > static_cast<std::size_t>(cols) ? rest.substr(static_cast<std::size_t>(cols)) : "";
-    }
-    std::ostringstream ms;
-    ms << static_cast<long>(state.last->readyMs + 0.5) << "ms";
-    drawText(surface, 6, y + 2, ms.str(), kDim, 2);
-    y += 24;
-
-    y = surface.height - 14 - static_cast<int>(state.history.size()) * 16;
-    y = std::max(y, 130);
-    for (const auto& entry : state.history) {
-        if (y > surface.height - 20)
-            break;
-        const int hcols = textCols(surface, 1);
-        drawText(surface, 6, y, clipped(entry.format + "  " + entry.text, hcols), kDim, 1);
-        y += 16;
-    }
+    fillRect(surface, 6, buttonTop + 4, surface.width - 12, surface.height - buttonTop - 8, kGood);
+    const std::string label = "SCAN";
+    const int labelW = static_cast<int>(label.size()) * 8 * 3;
+    drawText(surface, (surface.width - labelW) / 2, buttonTop + (surface.height - buttonTop - 24) / 2,
+             label, kBg, 3);
 }
 
 DisplaySink::DisplaySink(ResultSink& inner, const Config& config) : inner_(inner)

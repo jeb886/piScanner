@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "DecodeFiles.h"
 #include "DisplaySink.h"
+#include "TouchTrigger.h"
 #include "FileFrameSource.h"
 #include "Log.h"
 #include "PwmBeeper.h"
@@ -84,6 +85,18 @@ int main(int argc, char* argv[])
                 trigger = std::make_unique<GpioTrigger>(config);
             else
                 trigger = std::make_unique<StdinTrigger>();
+            // A display on a touch panel gets an on-screen SCAN button that
+            // acts as a second trigger source alongside GPIO/stdin.
+            if (!config.displayDevice.empty()) {
+                auto touch = TouchTrigger::create(kTriggerButton.x0, kTriggerButton.y0,
+                                                  kTriggerButton.x1, kTriggerButton.y1);
+                if (touch) {
+                    std::vector<std::unique_ptr<Trigger>> sources;
+                    sources.push_back(std::move(trigger));
+                    sources.push_back(std::move(touch));
+                    trigger = std::make_unique<MultiTrigger>(std::move(sources));
+                }
+            }
         }
         std::unique_ptr<FrameSource> source;
         if (config.source.empty())
