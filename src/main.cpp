@@ -91,7 +91,8 @@ int main(int argc, char* argv[])
                 // Hit area is a little taller than the visual button —
                 // resistive-panel taps land loosely around the target.
                 auto touch = TouchTrigger::create(kTriggerButton.x0, kTriggerButton.y0 - 0.07f,
-                                                  kTriggerButton.x1, kTriggerButton.y1);
+                                                  kTriggerButton.x1, kTriggerButton.y1,
+                                                  config.displayRotate);
                 if (touch) {
                     std::vector<std::unique_ptr<Trigger>> sources;
                     sources.push_back(std::move(trigger));

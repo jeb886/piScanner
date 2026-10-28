@@ -40,7 +40,7 @@ struct DisplayState {
 // Normalized rect (fractions of panel size) of the on-screen SCAN button;
 // TouchTrigger uses the same rect for hit-testing.
 struct DisplayButtonRect {
-    float x0 = 0.0f, y0 = 0.82f, x1 = 1.0f, y1 = 1.0f;
+    float x0 = 0.0f, y0 = 0.88f, x1 = 1.0f, y1 = 1.0f;
 };
 inline constexpr DisplayButtonRect kTriggerButton{};
 
@@ -69,7 +69,9 @@ private:
 
     ResultSink& inner_;
     int fd_ = -1;
+    int rotation_ = 0; // 0/90/180/270; 90/270 renders portrait into a landscape fb
     std::uint8_t* fb_ = nullptr;
+    int fbWidth_ = 0, fbHeight_ = 0, fbStride_ = 0;
     std::size_t fbBytes_ = 0;
     std::vector<std::uint8_t> backing_;
     DisplaySurface surface_{};

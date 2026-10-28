@@ -186,19 +186,18 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
     if (!state.last) {
         drawText(surface, 6, y + 20, "waiting for a scan...", kDim, 2);
     } else {
-        drawText(surface, 6, y, state.last->format, kGood, 3);
-        y += 34;
+        // Decode data first (white, wrapped), then "542ms | EAN-8" green.
         const int cols = textCols(surface, 2);
         std::string rest = state.last->text;
-        while (!rest.empty() && y < buttonTop - 60) {
+        while (!rest.empty() && y < buttonTop - 90) {
             const std::string row = clipped(rest, cols);
             drawText(surface, 6, y, row, kText, 2);
             y += 24; // a scale-2 glyph row is ~20px tall
             rest = rest.size() > static_cast<std::size_t>(cols) ? rest.substr(static_cast<std::size_t>(cols)) : "";
         }
-        std::ostringstream ms;
-        ms << static_cast<long>(state.last->readyMs + 0.5) << "ms";
-        drawText(surface, 6, y + 2, ms.str(), kDim, 2);
+        std::ostringstream status;
+        status << static_cast<long>(state.last->readyMs + 0.5) << "ms | " << state.last->format;
+        drawText(surface, 6, y + 2, status.str(), kGood, 2);
         y += 24;
 
         y = buttonTop - 8 - static_cast<int>(state.history.size()) * 16;
@@ -221,7 +220,7 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
              label, kBg, 3);
 }
 
-DisplaySink::DisplaySink(ResultSink& inner, const Config& config) : inner_(inner)
+DisplaySink::DisplaySink(ResultSink& inner, const Config& config) : inner_(inner), rotation_(config.displayRotate)
 {
     state_.historyLimit = static_cast<std::size_t>(std::max(1, config.displayLines));
     open(config);
@@ -262,13 +261,23 @@ void DisplaySink::open(const Config& config)
         return;
     }
 
-    surface_.width = static_cast<int>(var.xres);
-    surface_.height = static_cast<int>(var.yres);
-    surface_.strideBytes = static_cast<int>(fix.line_length);
+    fbWidth_ = static_cast<int>(var.xres);
+    fbHeight_ = static_cast<int>(var.yres);
+    fbStride_ = static_cast<int>(fix.line_length);
     surface_.bitsPerPixel = static_cast<int>(var.bits_per_pixel);
+    // Rotated UIs render into a portrait buffer; paint() maps it into the
+    // landscape framebuffer.
+    if (rotation_ == 90 || rotation_ == 270) {
+        surface_.width = fbHeight_;
+        surface_.height = fbWidth_;
+    } else {
+        surface_.width = fbWidth_;
+        surface_.height = fbHeight_;
+    }
+    surface_.strideBytes = surface_.width * (surface_.bitsPerPixel / 8);
     fbBytes_ = static_cast<std::size_t>(fix.smem_len);
     if (fbBytes_ == 0)
-        fbBytes_ = static_cast<std::size_t>(surface_.strideBytes) * surface_.height;
+        fbBytes_ = static_cast<std::size_t>(fbStride_) * fbHeight_;
 
     fb_ = static_cast<std::uint8_t*>(mmap(nullptr, fbBytes_, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0));
     if (fb_ == MAP_FAILED) {
@@ -281,8 +290,8 @@ void DisplaySink::open(const Config& config)
 
     backing_.resize(static_cast<std::size_t>(surface_.strideBytes) * surface_.height);
     surface_.pixels = backing_.data();
-    logLine("display " + path + " " + std::to_string(surface_.width) + "x" +
-            std::to_string(surface_.height) + " " + std::to_string(surface_.bitsPerPixel) + "bpp");
+    logLine("display " + path + " " + std::to_string(fbWidth_) + "x" + std::to_string(fbHeight_) +
+            " " + std::to_string(surface_.bitsPerPixel) + "bpp rot=" + std::to_string(rotation_));
     paint();
 }
 
@@ -301,9 +310,35 @@ void DisplaySink::paint()
     if (surface_.pixels == nullptr)
         return;
     renderDisplayFrame(surface_, state_);
-    const auto rows = std::min<std::size_t>(fbBytes_ / static_cast<std::size_t>(std::max(1, surface_.strideBytes)),
-                                            backing_.size() / static_cast<std::size_t>(std::max(1, surface_.strideBytes)));
-    std::memcpy(fb_, backing_.data(), rows * static_cast<std::size_t>(surface_.strideBytes));
+    const int bpp = surface_.bitsPerPixel / 8;
+    if (rotation_ == 0) {
+        const auto rows = std::min<std::size_t>(fbBytes_ / static_cast<std::size_t>(std::max(1, fbStride_)),
+                                                backing_.size() / static_cast<std::size_t>(std::max(1, surface_.strideBytes)));
+        for (std::size_t y = 0; y < rows; ++y)
+            std::memcpy(fb_ + y * fbStride_, backing_.data() + y * surface_.strideBytes,
+                        static_cast<std::size_t>(surface_.width) * bpp);
+        return;
+    }
+    // Rotated blit: portrait surface -> landscape framebuffer.
+    for (int y = 0; y < fbHeight_; ++y) {
+        for (int x = 0; x < fbWidth_; ++x) {
+            int sx, sy;
+            if (rotation_ == 270) {
+                sx = surface_.width - 1 - y;
+                sy = x;
+            } else if (rotation_ == 90) {
+                sx = y;
+                sy = surface_.height - 1 - x;
+            } else { // 180
+                sx = surface_.width - 1 - x;
+                sy = surface_.height - 1 - y;
+            }
+            auto* dst = fb_ + static_cast<std::size_t>(y) * fbStride_ + static_cast<std::size_t>(x) * bpp;
+            const auto* src = backing_.data() + static_cast<std::size_t>(sy) * surface_.strideBytes +
+                              static_cast<std::size_t>(sx) * bpp;
+            std::memcpy(dst, src, bpp);
+        }
+    }
 }
 
 void DisplaySink::onResult(const ScanResult& result)

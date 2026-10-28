@@ -84,8 +84,9 @@ bool MultiTrigger::wait(int timeoutMs, TriggerEvent& event)
     return true;
 }
 
-TouchDecoder::TouchDecoder(float x0, float y0, float x1, float y1, int xmin, int xmax, int ymin, int ymax)
-    : rx0_(x0), ry0_(y0), rx1_(x1), ry1_(y1),
+TouchDecoder::TouchDecoder(float x0, float y0, float x1, float y1, int xmin, int xmax, int ymin, int ymax,
+                           int rotation)
+    : rotation_(rotation), rx0_(x0), ry0_(y0), rx1_(x1), ry1_(y1),
       axMin_(xmin), axRange_(xmax - xmin), ayMin_(ymin), ayRange_(ymax - ymin)
 {
 }
@@ -94,10 +95,30 @@ bool TouchDecoder::inside() const
 {
     if (axRange_ <= 0 || ayRange_ <= 0)
         return false;
-    const float nx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
-    // The piscreen overlay reports Y inverted relative to the fbdev
-    // panel (bottom of screen reads as low raw Y); flip it back.
-    const float ny = 1.0f - static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
+    const float rx = static_cast<float>(curX_ - axMin_) / static_cast<float>(axRange_);
+    const float ry = static_cast<float>(curY_ - ayMin_) / static_cast<float>(ayRange_);
+    // The panel reports Y inverted relative to the framebuffer (bottom of
+    // screen reads as low raw Y); the transforms below fold that flip and
+    // the UI rotation into display-normalized coordinates.
+    float nx = 0, ny = 0;
+    switch (rotation_) {
+    case 90:
+        nx = 1.0f - ry;
+        ny = 1.0f - rx;
+        break;
+    case 270:
+        nx = ry;
+        ny = rx;
+        break;
+    case 180:
+        nx = 1.0f - rx;
+        ny = ry;
+        break;
+    default:
+        nx = rx;
+        ny = 1.0f - ry;
+        break;
+    }
     return nx >= rx0_ && nx <= rx1_ && ny >= ry0_ && ny <= ry1_;
 }
 
@@ -166,7 +187,7 @@ std::string findTouchDevice()
     return {};
 }
 
-std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1, float y1)
+std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1, float y1, int rotation)
 {
     const std::string path = findTouchDevice();
     if (path.empty())
@@ -182,7 +203,7 @@ std::unique_ptr<TouchTrigger> TouchTrigger::create(float x0, float y0, float x1,
     }
     logLine("touch " + path);
     return std::unique_ptr<TouchTrigger>(
-        new TouchTrigger(fd, TouchDecoder(x0, y0, x1, y1, xmin, xmax, ymin, ymax)));
+        new TouchTrigger(fd, TouchDecoder(x0, y0, x1, y1, xmin, xmax, ymin, ymax, rotation)));
 }
 
 TouchTrigger::TouchTrigger(int fd, TouchDecoder decoder) : fd_(fd), decoder_(decoder) {}

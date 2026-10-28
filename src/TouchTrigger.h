@@ -35,13 +35,15 @@ private:
 // rect. Kept fd-free so tests can drive it without hardware.
 class TouchDecoder {
 public:
-    TouchDecoder(float x0, float y0, float x1, float y1, int xmin, int xmax, int ymin, int ymax);
+    TouchDecoder(float x0, float y0, float x1, float y1, int xmin, int xmax, int ymin, int ymax,
+                 int rotation = 0);
     // Returns an event to emit, or nullopt while the batch continues.
     std::optional<TriggerEventType> feed(int type, int code, int value);
     std::string lastRaw() const;
 
 private:
     bool inside() const;
+    int rotation_ = 0;
     float rx0_, ry0_, rx1_, ry1_;
     int axMin_, axRange_, ayMin_, ayRange_;
     bool down_ = false;
@@ -56,7 +58,7 @@ private:
 // resistive touchscreen exists.
 class TouchTrigger final : public Trigger {
 public:
-    static std::unique_ptr<TouchTrigger> create(float x0, float y0, float x1, float y1);
+    static std::unique_ptr<TouchTrigger> create(float x0, float y0, float x1, float y1, int rotation = 0);
     ~TouchTrigger() override;
     bool wait(int timeoutMs, TriggerEvent& event) override;
 

@@ -249,14 +249,17 @@ void testArguments()
     CHECK(parse({"piscanner", "capture", "shot.png", "--warmup", "0"}, error).has_value());
     CHECK(parse({"piscanner", "capture", "shot.png", "--source", "some/dir"}, error).has_value());
     CHECK(!parse({"piscanner", "bench", "f.pgm", "--source", "some/dir"}, error).has_value());
-    auto disp = parse({"piscanner", "scan", "--display", "auto", "--display-lines", "3"}, error);
+    auto disp = parse({"piscanner", "scan", "--display", "auto", "--display-lines", "3",
+                       "--display-rotate", "270"}, error);
     CHECK(disp.has_value());
     if (disp) {
         CHECK(disp->displayDevice == "auto");
         CHECK(disp->displayLines == 3);
+        CHECK(disp->displayRotate == 270);
     }
     CHECK(!parse({"piscanner", "decode", "x.png", "--display", "auto"}, error).has_value());
     CHECK(!parse({"piscanner", "scan", "--display-lines", "0"}, error).has_value());
+    CHECK(!parse({"piscanner", "scan", "--display-rotate", "45"}, error).has_value());
 }
 
 // Every character of a representative barcode charset must map to a keycode,
