@@ -113,18 +113,38 @@ void drawText(DisplaySurface& s, int x, int y, const std::string& text, std::uin
     }
 }
 
-int textCols(const DisplaySurface& s, int scale)
+int textWidthPx(const std::string& text, int scale)
 {
-    // stb_easy_font advances ~8px per glyph at scale 1 on average; keep a
-    // 6px margin on each side.
-    return std::max(1, (s.width - 12) / (8 * scale));
+    std::string clean = sanitize(text);
+    return stb_easy_font_width(clean.data()) * scale;
 }
 
-std::string clipped(const std::string& text, int cols)
+// Longest prefix of `text` that renders within maxWidth pixels.
+std::size_t fitChars(const std::string& text, int scale, int maxWidth)
 {
-    if (static_cast<int>(text.size()) <= cols)
-        return text;
-    return text.substr(0, static_cast<std::size_t>(std::max(0, cols - 1))) + "~";
+    std::size_t n = 0;
+    while (n < text.size() && textWidthPx(text.substr(0, n + 1), scale) <= maxWidth)
+        ++n;
+    return n;
+}
+
+// Wrap into at most maxLines pixel-fitted lines; overflow on the last
+// line is truncated with a trailing "~".
+std::vector<std::string> wrapLines(const std::string& text, int scale, int maxWidth, int maxLines)
+{
+    std::vector<std::string> lines;
+    std::string rest = text;
+    while (!rest.empty() && static_cast<int>(lines.size()) < maxLines) {
+        std::size_t n = std::max<std::size_t>(1, fitChars(rest, scale, maxWidth));
+        if (static_cast<int>(lines.size()) == maxLines - 1 && n < rest.size()) {
+            n = std::max<std::size_t>(1, fitChars(rest, scale, maxWidth - textWidthPx("~", scale)));
+            lines.push_back(rest.substr(0, n) + "~");
+            break;
+        }
+        lines.push_back(rest.substr(0, n));
+        rest.erase(0, n);
+    }
+    return lines;
 }
 
 // Picks the panel's fb device for --display auto. With exactly one
@@ -186,14 +206,11 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
     if (!state.last) {
         drawText(surface, 6, y + 20, "waiting for a scan...", kDim, 2);
     } else {
-        // Decode data first (white, wrapped), then "542ms | EAN-8" green.
-        const int cols = textCols(surface, 3);
-        std::string rest = state.last->text;
-        while (!rest.empty() && y < buttonTop - 120) {
-            const std::string row = clipped(rest, cols);
+        // Decode data first (white, max 2 lines, truncated), then
+        // "542ms | EAN-8" green.
+        for (const auto& row : wrapLines(state.last->text, 3, surface.width - 12, 2)) {
             drawText(surface, 6, y, row, kText, 3);
             y += 36; // a scale-3 glyph row is ~30px tall
-            rest = rest.size() > static_cast<std::size_t>(cols) ? rest.substr(static_cast<std::size_t>(cols)) : "";
         }
         std::ostringstream status;
         status << static_cast<long>(state.last->readyMs + 0.5) << "ms | " << state.last->format;
@@ -214,10 +231,10 @@ void renderDisplayFrame(DisplaySurface& surface, const DisplayState& state)
         for (const auto& entry : state.history) {
             if (y > buttonTop - 16)
                 break;
-            const int hcols = textCols(surface, 2);
             std::ostringstream row;
             row << entry.format << " " << static_cast<long>(entry.readyMs + 0.5) << "ms  " << entry.text;
-            drawText(surface, 6, y, clipped(row.str(), hcols), kDim, 2);
+            const auto fitted = wrapLines(row.str(), 2, surface.width - 12, 1);
+            drawText(surface, 6, y, fitted.empty() ? std::string() : fitted.front(), kDim, 2);
             y += 22;
         }
     }
